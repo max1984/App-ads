@@ -1,0 +1,13 @@
+[tool.poetry]
+name = "app-ads-txt-validator"
+version = "1.0.0"
+description = "A stand-alone validator for app-ads.txt files with a desktop GUI."
+authors = ["Bartek"]
+
+[tool.poetry.dependencies]
+python = ">=3.10,<4.0"
+tkinterdnd2 = ">=0.3.3"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
