@@ -75,18 +75,39 @@ const VALID_CA_IDS = {
   'c45702d9311e25fd': 'POKKT',
   '20e30b2ae1f670f2': 'Hindsight Solutions',
   'd954590d0cb265b9': 'Undertone',
-  'e2541279e8e2ca4d': 'Beachfront',
+}
+
+const SEVERITY_RANK = { error: 3, warning: 2, duplicate: 1, corrected: 0 }
+
+function worstOf(a, b) {
+  if (!a) return b
+  if (!b) return a
+  return SEVERITY_RANK[a] >= SEVERITY_RANK[b] ? a : b
 }
 
 export function validateAdsTxt(content) {
   const lines = content.split('\n')
   const correctedLines = []
+  // one entry per output line: null | 'error' | 'warning' | 'duplicate' | 'corrected'
+  const outputLineStatuses = []
   const issues = []
+  // input line number → worst severity on that line
+  const inputLineIssues = new Map()
   const seenRecords = new Set()
   const variables = {}
   let totalRecords = 0
   let keptRecords = 0
   let duplicatesRemoved = 0
+
+  const pushIssue = (issue) => {
+    issues.push(issue)
+    if (issue.lineNumber > 0) {
+      inputLineIssues.set(
+        issue.lineNumber,
+        worstOf(inputLineIssues.get(issue.lineNumber), issue.severity)
+      )
+    }
+  }
 
   lines.forEach((line, idx) => {
     const lineNumber = idx + 1
@@ -94,6 +115,7 @@ export function validateAdsTxt(content) {
 
     if (!stripped || stripped.startsWith('#')) {
       correctedLines.push(line)
+      outputLineStatuses.push(null)
       return
     }
 
@@ -104,7 +126,7 @@ export function validateAdsTxt(content) {
       const value = stripped.slice(eqIdx + 1).trim()
 
       if (!SUPPORTED_VARIABLES.has(varName)) {
-        issues.push({
+        pushIssue({
           severity: 'warning',
           lineNumber,
           message: `Unsupported variable '${varName}'.`,
@@ -112,21 +134,24 @@ export function validateAdsTxt(content) {
           suggestion: `Valid variables: ${[...SUPPORTED_VARIABLES].sort().join(', ')}`
         })
         correctedLines.push(line)
+        outputLineStatuses.push('warning')
         return
       }
 
       if (varName === 'OWNERDOMAIN' && variables[varName]) {
-        issues.push({
+        pushIssue({
           severity: 'warning',
           lineNumber,
-          message: `Multiple OWNERDOMAIN declarations — only one is allowed per spec. First value is used.`,
+          message: `Multiple OWNERDOMAIN declarations — only one is allowed per spec.`,
           original: stripped,
           suggestion: `Remove this line and keep only one OWNERDOMAIN declaration.`
         })
       }
 
       variables[varName] = value
-      correctedLines.push(`${varName}=${value}`)
+      const corrected = `${varName}=${value}`
+      correctedLines.push(corrected)
+      outputLineStatuses.push(corrected !== stripped ? 'corrected' : null)
       return
     }
 
@@ -144,13 +169,14 @@ export function validateAdsTxt(content) {
     const parts = mainPart.split(',').map(p => p.trim())
 
     if (parts.length < 3) {
-      issues.push({
+      pushIssue({
         severity: 'error',
         lineNumber,
         message: `Invalid format — needs at least 3 fields (domain, publisher_id, relationship), got ${parts.length}.`,
         original: stripped,
         suggestion: `Example: google.com, pub-0000000000000000, DIRECT, f08c47fec0942fa0`
       })
+      // skip invalid lines — do NOT add to output
       return
     }
 
@@ -159,10 +185,10 @@ export function validateAdsTxt(content) {
     const relationship = parts[2].toUpperCase()
     const certId = parts[3] ? parts[3].trim() : ''
 
-    // Duplicate check (domain + publisherId + certId)
+    // Duplicate check
     const recordKey = `${domain}|${publisherId}|${certId}`
     if (seenRecords.has(recordKey)) {
-      issues.push({
+      pushIssue({
         severity: 'duplicate',
         lineNumber,
         message: `Duplicate removed: ${domain}, ${publisherId}${certId ? ', ' + certId : ''}.`,
@@ -174,15 +200,16 @@ export function validateAdsTxt(content) {
     }
     seenRecords.add(recordKey)
 
+    // Per-line issues collected separately so we can determine output status
     const lineIssues = []
 
     if (!DOMAIN_REGEX.test(domain)) {
       lineIssues.push({
         severity: 'error',
         lineNumber,
-        message: `Invalid domain '${domain}' — must be a valid hostname.`,
+        message: `Invalid domain '${domain}'.`,
         original: stripped,
-        suggestion: `Check for typos, invalid characters, or missing TLD (e.g. use 'google.com' not 'google').`
+        suggestion: `Check for typos, invalid characters, or missing TLD (e.g. 'google.com' not 'google').`
       })
     }
 
@@ -205,7 +232,7 @@ export function validateAdsTxt(content) {
         message: `Invalid relationship '${relationship}' — must be DIRECT or RESELLER.`,
         original: stripped,
         suggestion: guess
-          ? `Change '${parts[2]}' to '${guess}': ${domain}, ${publisherId}, ${guess}${certId ? ', ' + certId : ''}`
+          ? `Change to: ${domain}, ${publisherId}, ${guess}${certId ? ', ' + certId : ''}`
           : `Replace '${parts[2]}' with either DIRECT or RESELLER.`
       })
     }
@@ -216,34 +243,41 @@ export function validateAdsTxt(content) {
         lineIssues.push({
           severity: 'error',
           lineNumber,
-          message: `Certification ID '${certId}' contains invalid characters.`,
+          message: `Cert ID '${certId}' contains invalid characters.`,
           original: stripped,
           suggestion: `Remove invalid characters: ${domain}, ${publisherId}, ${relationship}, ${cleaned}`
         })
-      } else {
-        const caName = VALID_CA_IDS[certId.toLowerCase()]
-        if (!caName) {
-          lineIssues.push({
-            severity: 'warning',
-            lineNumber,
-            message: `Cert ID '${certId}' not found in known TAG registry — may still be valid.`,
-            original: stripped,
-            suggestion: `Verify this cert ID with the ad network directly.`
-          })
-        }
+      } else if (!VALID_CA_IDS[certId.toLowerCase()]) {
+        lineIssues.push({
+          severity: 'warning',
+          lineNumber,
+          message: `Cert ID '${certId}' not found in known TAG registry — may still be valid.`,
+          original: stripped,
+          suggestion: `Verify this cert ID with the ad network directly.`
+        })
       }
     }
 
-    issues.push(...lineIssues)
-    keptRecords++
+    lineIssues.forEach(i => pushIssue(i))
 
+    const worstLineSeverity = lineIssues.reduce(
+      (w, i) => worstOf(w, i.severity), null
+    )
+
+    // Check if any field was auto-corrected (case normalization)
+    const wasCorrected = !worstLineSeverity && (
+      parts[0] !== domain || parts[1] !== publisherId || parts[2] !== relationship
+    )
+
+    keptRecords++
     const recordParts = [domain, publisherId, relationship]
     if (certId) recordParts.push(certId)
     correctedLines.push(recordParts.join(', ') + extensionData)
+    outputLineStatuses.push(worstLineSeverity ?? (wasCorrected ? 'corrected' : null))
   })
 
   if (totalRecords === 0 && Object.keys(variables).length === 0) {
-    issues.push({
+    pushIssue({
       severity: 'error',
       lineNumber: 0,
       message: 'File contains no valid data records or variable declarations.',
@@ -254,6 +288,8 @@ export function validateAdsTxt(content) {
 
   return {
     cleanedContent: correctedLines.join('\n'),
+    outputLineStatuses,
+    inputLineIssues,
     issues,
     stats: {
       totalRecords,
