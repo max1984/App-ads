@@ -146,6 +146,7 @@
 .gutter-warning   { background: #fef3c7; color: #d97706; font-weight: 600; }
 .gutter-duplicate { background: #ede9fe; color: #7c3aed; font-weight: 600; }
 .gutter-corrected { background: #d1fae5; color: #059669; }
+.gutter-filled    { background: #e0f2fe; color: #0284c7; }
 
 .editor {
   flex: 1;
@@ -208,6 +209,7 @@
 .stat-error strong   { color: #dc2626; }
 .stat-warning strong { color: #d97706; }
 .stat-dupe strong    { color: #7c3aed; }
+.stat-filled strong  { color: #0284c7; }
 .stat-clean          { color: #059669 !important; font-weight: 500; }
 .line-count          { font-size: 12px; color: #94a3b8; }
 
@@ -264,6 +266,7 @@
 .issue-error     { border-left: 3px solid #ef4444; }
 .issue-warning   { border-left: 3px solid #f59e0b; }
 .issue-duplicate { border-left: 3px solid #8b5cf6; }
+.issue-filled    { border-left: 3px solid #0284c7; }
 .issue-info      { border-left: 3px solid #3b82f6; }
 
 .issue-top {
@@ -299,6 +302,7 @@
 .badge-error     { background: #fee2e2; color: #dc2626; }
 .badge-warning   { background: #fef3c7; color: #d97706; }
 .badge-duplicate { background: #ede9fe; color: #7c3aed; }
+.badge-filled    { background: #e0f2fe; color: #0284c7; }
 .badge-info      { background: #dbeafe; color: #2563eb; }
 
 .issue-line    { font-size: 12px; color: var(--text-muted); font-family: var(--font-mono); flex-shrink: 0; }

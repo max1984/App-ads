@@ -209,7 +209,9 @@ export default function App() {
                   <span className="stat stat-warning"><strong>{result.stats.warnings}</strong> warnings</span>}
                 {result.stats.duplicatesRemoved > 0 &&
                   <span className="stat stat-dupe"><strong>{result.stats.duplicatesRemoved}</strong> dupes removed</span>}
-                {result.stats.errors === 0 && result.stats.warnings === 0 && result.stats.duplicatesRemoved === 0 &&
+                {result.stats.certsAdded > 0 &&
+                  <span className="stat stat-filled"><strong>{result.stats.certsAdded}</strong> certs added</span>}
+                {result.stats.errors === 0 && result.stats.warnings === 0 && result.stats.duplicatesRemoved === 0 && result.stats.certsAdded === 0 &&
                   <span className="stat stat-clean">✓ All clean</span>}
               </div>
             )}
@@ -227,6 +229,7 @@ export default function App() {
                   { key: 'error',     label: `Errors (${issueCount('error')})`,         show: issueCount('error') > 0 },
                   { key: 'warning',   label: `Warnings (${issueCount('warning')})`,     show: issueCount('warning') > 0 },
                   { key: 'duplicate', label: `Duplicates (${issueCount('duplicate')})`, show: issueCount('duplicate') > 0 },
+                  { key: 'filled',    label: `Certs added (${issueCount('filled')})`,   show: issueCount('filled') > 0 },
                 ].filter(t => t.key === 'all' || t.show).map(tab => (
                   <button
                     key={tab.key}
@@ -259,6 +262,7 @@ const STATUS_COLOR = {
   warning:   'gutter-warning',
   duplicate: 'gutter-duplicate',
   corrected: 'gutter-corrected',
+  filled:    'gutter-filled',
 }
 
 function GutterEditor({
@@ -328,6 +332,7 @@ function IssueCard({ issue }) {
     error:     { label: 'Error',     cls: 'error' },
     warning:   { label: 'Warning',   cls: 'warning' },
     duplicate: { label: 'Duplicate', cls: 'duplicate' },
+    filled:    { label: 'Cert added', cls: 'filled' },
   }[issue.severity] ?? { label: issue.severity, cls: 'info' }
 
   return (
