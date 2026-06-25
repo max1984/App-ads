@@ -325,6 +325,7 @@ export function validateAdsTxt(content) {
   const seenRecords = new Set()
   const seenDomains = new Set()
   const records = []
+  const changes = []   // before → after for every transformed line
   const variables = {}
   let totalRecords = 0
   let keptRecords = 0
@@ -441,6 +442,7 @@ export function validateAdsTxt(content) {
         original: stripped,
         suggestion: null
       })
+      changes.push({ lineNumber, original: stripped, cleaned: null, type: 'duplicate' })
       duplicatesRemoved++
       return
     }
@@ -528,8 +530,15 @@ export function validateAdsTxt(content) {
     // BUG-02 FIX: Use publisherIdRaw (original case) in output, not lowercased version.
     const recordParts = [domain, publisherIdRaw, relationship]
     if (certId) recordParts.push(certId)
-    correctedLines.push(recordParts.join(', ') + extensionData)
+    const cleanedLine = recordParts.join(', ') + extensionData
+    correctedLines.push(cleanedLine)
     outputLineStatuses.push(worstLineSeverity ?? (wasCorrected ? 'corrected' : null))
+
+    if (certWasFilled) {
+      changes.push({ lineNumber, original: stripped, cleaned: cleanedLine, type: 'cert-added' })
+    } else if (wasCorrected) {
+      changes.push({ lineNumber, original: stripped, cleaned: cleanedLine, type: 'corrected' })
+    }
 
     records.push({ domain, publisherId: publisherIdRaw, relationship, certId, extensions: extensionData, lineNumber })
   })
@@ -550,6 +559,7 @@ export function validateAdsTxt(content) {
     inputLineIssues,
     issues,
     records,
+    changes,
     stats: {
       totalRecords,
       keptRecords,
