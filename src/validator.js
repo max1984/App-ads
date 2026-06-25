@@ -168,7 +168,7 @@ export const VALID_CA_IDS = {
 }
 
 // Domain → cert ID mapping (derived from known TAG certifications)
-const DOMAIN_TO_CERT = {
+export const DOMAIN_TO_CERT = {
   // Google
   'google.com':              'f08c47fec0942fa0',
   'googleadservices.com':    'f08c47fec0942fa0',

@@ -216,7 +216,7 @@
 
 .editor::placeholder { color: var(--text-muted); opacity: 0.6; }
 
-.editor-drag    { background: color-mix(in srgb, var(--primary) 8%, transparent); }
+.editor-drag    { background: var(--bg); background: color-mix(in srgb, var(--primary) 8%, transparent); }
 .editor-output  { background: var(--output-bg); cursor: default; }
 
 /* ── Buttons ─────────────────────────────────────────────────── */
@@ -347,6 +347,12 @@
   cursor: pointer;
   gap: 8px;
   user-select: none;
+  width: 100%;
+  background: none;
+  border: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
 }
 .issue-top:hover { background: var(--bg); }
 
@@ -565,7 +571,7 @@
 
 .batch-row {
   display: grid;
-  grid-template-columns: 24px 1fr auto auto;
+  grid-template-columns: 24px 1fr auto auto auto;
   align-items: center;
   gap: 10px;
   padding: 9px 14px;
@@ -677,9 +683,9 @@
 }
 .diff-row:last-child { border-bottom: none; }
 
-.diff-row-dupe      { background: color-mix(in srgb, var(--dupe-bg) 40%, transparent); }
-.diff-row-filled    { background: color-mix(in srgb, var(--filled-bg) 40%, transparent); }
-.diff-row-corrected { background: color-mix(in srgb, var(--success-bg) 40%, transparent); }
+.diff-row-dupe      { background: var(--dupe-bg);    background: color-mix(in srgb, var(--dupe-bg)    40%, transparent); }
+.diff-row-filled    { background: var(--filled-bg);  background: color-mix(in srgb, var(--filled-bg)  40%, transparent); }
+.diff-row-corrected { background: var(--success-bg); background: color-mix(in srgb, var(--success-bg) 40%, transparent); }
 
 .diff-lineno {
   padding: 8px;
@@ -787,7 +793,8 @@
 }
 
 .coverage-item.present { opacity: 1; }
-.coverage-item.missing { opacity: 0.55; }
+.coverage-item.missing { opacity: 0.55; cursor: pointer; }
+.coverage-item.missing:hover { opacity: 0.85; background: var(--bg); }
 
 .coverage-icon {
   font-size: 13px;
@@ -813,3 +820,62 @@
   color: var(--text-muted);
   flex-shrink: 0;
 }
+
+.coverage-hint {
+  padding: 8px 14px;
+  font-size: 12px;
+  color: var(--text-muted);
+  border-top: 1px solid var(--border);
+}
+
+/* ── Batch toggle row ────────────────────────────────────────── */
+.batch-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.batch-toggle-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.btn-sm { padding: 4px 10px; font-size: 12px; }
+
+/* ── Panel header left (title + sort) ────────────────────────── */
+.panel-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* ── IAB spec help link ──────────────────────────────────────── */
+.help-link {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background 0.12s, color 0.12s;
+}
+.help-link:hover { background: var(--bg); color: var(--text); }
+
+/* ── Apply fix button ────────────────────────────────────────── */
+.apply-fix-btn {
+  align-self: flex-start;
+  padding: 4px 12px;
+  border: 1px solid var(--primary);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.apply-fix-btn:hover { background: var(--primary); color: #fff; }

@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect, useMemo, forwardRef, useImperativeHandle } from 'react'
-import { validateAdsTxt, TOP_NETWORKS } from './validator'
+import { validateAdsTxt, TOP_NETWORKS, DOMAIN_TO_CERT } from './validator'
 import './App.css'
 
 const PLACEHOLDER = `# Paste your app-ads.txt content here
@@ -8,7 +8,23 @@ const PLACEHOLDER = `# Paste your app-ads.txt content here
 google.com, pub-0000000000000000, DIRECT, f08c47fec0942fa0
 appnexus.com, 1234, RESELLER, f5ab79cb980f11d1`
 
-const LARGE_FILE_THRESHOLD = 2000  // data lines
+const LARGE_FILE_THRESHOLD = 2000
+
+// BUG-08 FIX: replace deprecated escape/unescape with TextEncoder/TextDecoder
+function encodeShare(str) {
+  try {
+    const bytes = new TextEncoder().encode(str)
+    const binStr = Array.from(bytes, b => String.fromCodePoint(b)).join('')
+    return btoa(binStr)
+  } catch { return null }
+}
+function decodeShare(b64) {
+  try {
+    const binStr = atob(b64)
+    const bytes = Uint8Array.from(binStr, c => c.codePointAt(0))
+    return new TextDecoder().decode(bytes)
+  } catch { return null }
+}
 
 async function fetchFromUrl(url) {
   try {
@@ -23,11 +39,16 @@ async function fetchFromUrl(url) {
   }
 }
 
-function encodeShare(str) {
-  try { return btoa(unescape(encodeURIComponent(str))) } catch { return null }
-}
-function decodeShare(b64) {
-  try { return decodeURIComponent(escape(atob(b64))) } catch { return null }
+// BUG-05 FIX: semaphore to cap batch concurrency at 5
+function createSemaphore(max) {
+  let count = 0
+  const queue = []
+  return async function run(fn) {
+    if (count >= max) await new Promise(resolve => queue.push(resolve))
+    count++
+    try { return await fn() }
+    finally { count--; if (queue.length) queue.shift()() }
+  }
 }
 
 export default function App() {
@@ -36,6 +57,7 @@ export default function App() {
   const [isDragging, setIsDragging] = useState(false)
   const [copiedOutput, setCopiedOutput] = useState(false)
   const [copiedShare, setCopiedShare] = useState(false)
+  const [copiedNetwork, setCopiedNetwork] = useState(null)
   const [issueFilter, setIssueFilter] = useState('all')
   const [urlValue, setUrlValue] = useState('')
   const [urlLoading, setUrlLoading] = useState(false)
@@ -56,12 +78,12 @@ export default function App() {
   const fileInputRef = useRef()
   const inputEditorRef = useRef()
   const validateTimerRef = useRef()
+  const batchGenRef = useRef(0)  // BUG-06 FIX: generation counter for race condition
 
   useEffect(() => {
     document.documentElement.setAttribute('data-dark', darkMode ? '1' : '')
   }, [darkMode])
 
-  // Decode shared content from URL hash on mount
   useEffect(() => {
     const hash = window.location.hash.slice(1)
     if (!hash) return
@@ -73,7 +95,13 @@ export default function App() {
     }
   }, [])
 
-  useEffect(() => { setCollapsedIssues(new Set()) }, [result])
+  // BUG-01 FIX: also reset issueFilter when result changes
+  useEffect(() => {
+    setCollapsedIssues(new Set())
+    setIssueFilter('all')
+    // UX-05 FIX: auto-expand diff when there are changes
+    if (result?.changes.length > 0) setShowDiff(true)
+  }, [result])
 
   const runValidation = useCallback((text) => {
     clearTimeout(validateTimerRef.current)
@@ -84,6 +112,7 @@ export default function App() {
   const handleInputChange = useCallback((e) => {
     const text = e.target.value
     setInput(text)
+    setLoadedUrl('')  // BUG-03 FIX: clear stale URL breadcrumb on manual edit
     clearTimeout(validateTimerRef.current)
     if (!text.trim()) { setResult(null); return }
     validateTimerRef.current = setTimeout(() => setResult(validateAdsTxt(text)), 300)
@@ -124,41 +153,41 @@ export default function App() {
     }
   }
 
-  // Batch URL check — fetches all URLs in parallel, updates results as each finishes
+  // BUG-05 + BUG-06 FIX: semaphore-limited concurrency + generation counter
   const handleBatchCheck = async () => {
     const urls = batchInput.split('\n').map(u => u.trim()).filter(Boolean)
     if (!urls.length) return
+    const gen = ++batchGenRef.current
     setBatchLoading(true)
     setBatchResults(urls.map(url => ({ url, status: 'loading', result: null, content: null, error: null })))
+    const sem = createSemaphore(5)
     await Promise.all(
-      urls.map(async (url, i) => {
+      urls.map((url, i) => sem(async () => {
+        if (batchGenRef.current !== gen) return
         try {
           const content = await fetchFromUrl(url)
           const r = validateAdsTxt(content)
-          setBatchResults(prev => {
-            const next = [...prev]
-            next[i] = { url, status: 'done', result: r, content, error: null }
-            return next
-          })
+          if (batchGenRef.current !== gen) return
+          setBatchResults(prev => { const n = [...prev]; n[i] = { url, status: 'done', result: r, content, error: null }; return n })
         } catch (e) {
-          setBatchResults(prev => {
-            const next = [...prev]
-            next[i] = { url, status: 'error', result: null, content: null, error: e.message }
-            return next
-          })
+          if (batchGenRef.current !== gen) return
+          setBatchResults(prev => { const n = [...prev]; n[i] = { url, status: 'error', result: null, content: null, error: e.message }; return n })
         }
-      })
+      }))
     )
-    setBatchLoading(false)
+    if (batchGenRef.current === gen) setBatchLoading(false)
   }
 
-  const { displayContent, displayStatuses } = useMemo(() => {
-    if (!result) return { displayContent: '', displayStatuses: [] }
-    if (!sortOutput) return { displayContent: result.cleanedContent, displayStatuses: result.outputLineStatuses }
+  const { displayContent, displayStatuses, sortedRecords } = useMemo(() => {
+    if (!result) return { displayContent: '', displayStatuses: [], sortedRecords: [] }
+    if (!sortOutput) return {
+      displayContent: result.cleanedContent,
+      displayStatuses: result.outputLineStatuses,
+      sortedRecords: result.records,
+    }
     const lines = result.cleanedContent.split('\n')
     const statuses = result.outputLineStatuses
-    const headers = []
-    const dataRows = []
+    const headers = [], dataRows = []
     lines.forEach((line, i) => {
       const t = line.trim()
       if (!t || t.startsWith('#')) headers.push({ line, status: statuses[i] ?? null })
@@ -166,7 +195,13 @@ export default function App() {
     })
     dataRows.sort((a, b) => a.line.localeCompare(b.line))
     const all = [...headers, ...dataRows]
-    return { displayContent: all.map(r => r.line).join('\n'), displayStatuses: all.map(r => r.status) }
+    // BUG-04 FIX: also sort records for JSON export
+    const sorted = [...result.records].sort((a, b) => a.domain.localeCompare(b.domain))
+    return {
+      displayContent: all.map(r => r.line).join('\n'),
+      displayStatuses: all.map(r => r.status),
+      sortedRecords: sorted,
+    }
   }, [result, sortOutput])
 
   const handleCopyOutput = async () => {
@@ -187,7 +222,8 @@ export default function App() {
 
   const handleJsonExport = () => {
     if (!result) return
-    const blob = new Blob([JSON.stringify(result.records, null, 2)], { type: 'application/json' })
+    // BUG-04 FIX: use sortedRecords so JSON matches the sorted .txt download
+    const blob = new Blob([JSON.stringify(sortedRecords, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url; a.download = 'app-ads.json'; a.click()
@@ -221,6 +257,29 @@ export default function App() {
     })
   }, [])
 
+  // FEAT: apply a parsed fix directly to the input
+  const handleApplyFix = useCallback((issue, fixLine) => {
+    const lines = input.split('\n')
+    if (issue.lineNumber > 0 && issue.lineNumber <= lines.length) {
+      lines[issue.lineNumber - 1] = fixLine
+      const newInput = lines.join('\n')
+      setInput(newInput)
+      clearTimeout(validateTimerRef.current)
+      setResult(validateAdsTxt(newInput))
+    }
+  }, [input])
+
+  // UX-02 FEAT: copy template line for a missing coverage network
+  const handleCopyNetworkTemplate = async (network) => {
+    const cert = DOMAIN_TO_CERT[network.domain]
+    const line = cert
+      ? `${network.domain}, YOUR_PUBLISHER_ID, DIRECT, ${cert}`
+      : `${network.domain}, YOUR_PUBLISHER_ID, DIRECT`
+    await navigator.clipboard.writeText(line)
+    setCopiedNetwork(network.domain)
+    setTimeout(() => setCopiedNetwork(null), 2000)
+  }
+
   const handleExpandAll  = () => setCollapsedIssues(new Set())
   const handleCollapseAll = () => result && setCollapsedIssues(new Set(result.issues.map((_, i) => i)))
 
@@ -234,6 +293,11 @@ export default function App() {
   const dataLineCount = input.split('\n').filter(l => l.trim() && !l.trim().startsWith('#')).length
   const isLargeFile = dataLineCount > LARGE_FILE_THRESHOLD
 
+  // UX-07 FIX: dynamic output panel title
+  const outputTitle = result && result.stats.errors > 0
+    ? `Output (${result.stats.errors} error${result.stats.errors !== 1 ? 's' : ''})`
+    : 'Cleaned Output'
+
   return (
     <div className="app">
       <header className="header">
@@ -242,13 +306,22 @@ export default function App() {
           <p>Validate, deduplicate and fix your app-ads.txt file</p>
         </div>
         <div className="header-right">
+          <a
+            className="help-link"
+            href="https://iabtechlab.com/app-ads-txt/"
+            target="_blank"
+            rel="noopener noreferrer"
+            title="IAB Tech Lab app-ads.txt specification"
+          >
+            ? IAB spec
+          </a>
           <button
             className={`btn btn-ghost${copiedShare ? ' btn-success' : ''}`}
             onClick={handleShare}
             disabled={!input.trim()}
             title="Copy shareable link to clipboard"
           >
-            {copiedShare ? '✓ Link copied!' : 'Share'}
+            {copiedShare ? '✓ Copied!' : 'Share'}
           </button>
           <button
             className="btn btn-ghost dark-toggle"
@@ -267,21 +340,25 @@ export default function App() {
           <input
             className="url-input"
             type="url"
-            placeholder="https://example.com/app-ads.txt"
+            placeholder="https://example.com/app-ads.txt  (Enter to load)"
             value={urlValue}
             onChange={e => { setUrlValue(e.target.value); setUrlError('') }}
             onKeyDown={e => e.key === 'Enter' && handleLoadUrl()}
           />
           <button className="btn btn-ghost" onClick={handleLoadUrl} disabled={!urlValue.trim() || urlLoading}>
-            {urlLoading ? 'Loading…' : 'Load from URL'}
+            {urlLoading ? 'Loading…' : 'Load'}
           </button>
+        </div>
+
+        {/* UX-03 FIX: batch check is now a separate row, not crammed into the URL bar */}
+        <div className="batch-toggle-row">
           <button
-            className={`btn btn-ghost${showBatch ? ' btn-active' : ''}`}
+            className={`btn btn-ghost btn-sm${showBatch ? ' btn-active' : ''}`}
             onClick={() => setShowBatch(v => !v)}
-            title="Validate multiple URLs at once"
           >
-            Batch check
+            {showBatch ? '▲' : '▼'} Batch URL check
           </button>
+          <span className="batch-toggle-hint">Validate multiple app-ads.txt files at once</span>
         </div>
 
         {urlError && <p className="url-error">{urlError}</p>}
@@ -298,7 +375,7 @@ export default function App() {
           <div className="batch-panel">
             <div className="batch-header">
               <span className="panel-title">Batch URL Check</span>
-              <p className="batch-hint">One URL per line — fetches and validates each file in parallel.</p>
+              <p className="batch-hint">One URL per line — fetches and validates up to 5 at a time.</p>
             </div>
             <textarea
               className="batch-textarea"
@@ -308,15 +385,13 @@ export default function App() {
               rows={4}
             />
             <div className="batch-actions">
-              <button
-                className="btn btn-primary"
-                onClick={handleBatchCheck}
-                disabled={!batchInput.trim() || batchLoading}
-              >
+              <button className="btn btn-primary" onClick={handleBatchCheck} disabled={!batchInput.trim() || batchLoading}>
                 {batchLoading ? 'Checking…' : 'Check all URLs'}
               </button>
               {batchResults.length > 0 && (
-                <button className="btn btn-ghost" onClick={() => setBatchResults([])}>Clear results</button>
+                <button className="btn btn-ghost" onClick={() => { setBatchResults([]); batchGenRef.current++ }}>
+                  Clear results
+                </button>
               )}
             </div>
             {batchResults.length > 0 && (
@@ -337,7 +412,12 @@ export default function App() {
               <span className="panel-title">Input</span>
               <div className="panel-actions">
                 <button className="btn btn-ghost" onClick={() => fileInputRef.current.click()}>Upload file</button>
-                <button className="btn btn-ghost" onClick={() => { setInput(''); setResult(null); setLoadedUrl('') }}>Clear</button>
+                <button className="btn btn-ghost" onClick={() => {
+                  setInput(''); setResult(null); setLoadedUrl('')
+                  setSortOutput(false)  // BUG-02 FIX: reset sort on clear
+                }}>
+                  Clear
+                </button>
                 <input ref={fileInputRef} type="file" accept=".txt,text/plain" hidden onChange={e => loadFile(e.target.files[0])} />
               </div>
             </div>
@@ -372,13 +452,16 @@ export default function App() {
 
           {/* OUTPUT */}
           <div className="panel">
+            {/* UX-08 FIX: sort toggle moved to header, separated from action buttons */}
             <div className="panel-header">
-              <span className="panel-title">Cleaned Output</span>
-              <div className="panel-actions">
+              <div className="panel-header-left">
+                <span className="panel-title">{outputTitle}</span>
                 <label className="sort-label">
                   <input type="checkbox" checked={sortOutput} onChange={e => setSortOutput(e.target.checked)} disabled={!result} />
                   Sort A–Z
                 </label>
+              </div>
+              <div className="panel-actions">
                 <button className={`btn btn-ghost${copiedOutput ? ' btn-success' : ''}`} onClick={handleCopyOutput} disabled={!result}>
                   {copiedOutput ? '✓ Copied!' : 'Copy'}
                 </button>
@@ -388,12 +471,7 @@ export default function App() {
             </div>
 
             {result ? (
-              <GutterEditor
-                value={displayContent}
-                readOnly
-                lineStatuses={displayStatuses}
-                placeholder=""
-              />
+              <GutterEditor value={displayContent} readOnly lineStatuses={displayStatuses} placeholder="" />
             ) : (
               <div className="output-empty">
                 <div className="output-empty-arrow">→</div>
@@ -496,6 +574,7 @@ export default function App() {
                   expanded={!collapsedIssues.has(i)}
                   onToggle={() => handleToggleIssue(i)}
                   onJumpToLine={handleJumpToLine}
+                  onApplyFix={handleApplyFix}
                 />
               ))}
             </div>
@@ -517,18 +596,32 @@ export default function App() {
               <span className="coverage-chevron">{showCoverage ? '▲' : '▼'}</span>
             </button>
             {showCoverage && (
-              <div className="coverage-grid">
-                {TOP_NETWORKS.map(n => {
-                  const present = result.coverage.present.some(p => p.domain === n.domain)
-                  return (
-                    <div key={n.domain} className={`coverage-item${present ? ' present' : ' missing'}`}>
-                      <span className="coverage-icon">{present ? '✓' : '○'}</span>
-                      <span className="coverage-name">{n.name}</span>
-                      <span className="coverage-domain">{n.domain}</span>
-                    </div>
-                  )
-                })}
-              </div>
+              <>
+                <p className="coverage-hint">
+                  Missing networks: click to copy a ready-to-paste template line to your clipboard.
+                </p>
+                <div className="coverage-grid">
+                  {TOP_NETWORKS.map(n => {
+                    const present = result.coverage.present.some(p => p.domain === n.domain)
+                    const wasCopied = copiedNetwork === n.domain
+                    return (
+                      <div
+                        key={n.domain}
+                        className={`coverage-item${present ? ' present' : ' missing'}`}
+                        onClick={!present ? () => handleCopyNetworkTemplate(n) : undefined}
+                        title={!present ? `Click to copy template line for ${n.name}` : undefined}
+                      >
+                        {/* UX-01 FIX: ✗ for missing, ✓ for present */}
+                        <span className="coverage-icon">
+                          {wasCopied ? '✓' : present ? '✓' : '✗'}
+                        </span>
+                        <span className="coverage-name">{n.name}</span>
+                        <span className="coverage-domain">{wasCopied ? 'copied!' : n.domain}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </>
             )}
           </div>
         )}
@@ -613,20 +706,16 @@ const GutterEditor = forwardRef(function GutterEditor({
 /* ── Diff row ─────────────────────────────────────────────────── */
 
 const DIFF_META = {
-  'duplicate':  { label: 'Removed',     cls: 'dupe' },
-  'cert-added': { label: 'Cert added',  cls: 'filled' },
-  'corrected':  { label: 'Normalized',  cls: 'corrected' },
+  'duplicate':  { label: 'Removed',    cls: 'dupe' },
+  'cert-added': { label: 'Cert added', cls: 'filled' },
+  'corrected':  { label: 'Normalized', cls: 'corrected' },
 }
 
 function DiffRow({ change, onJumpToLine }) {
   const meta = DIFF_META[change.type] ?? { label: change.type, cls: 'info' }
   return (
     <div className={`diff-row diff-row-${meta.cls}`}>
-      <span
-        className="diff-lineno"
-        title="Jump to this line"
-        onClick={() => onJumpToLine?.(change.lineNumber)}
-      >
+      <span className="diff-lineno" title="Jump to this line" onClick={() => onJumpToLine?.(change.lineNumber)}>
         {change.lineNumber}
       </span>
       <code className="diff-original">{change.original}</code>
@@ -642,6 +731,15 @@ function DiffRow({ change, onJumpToLine }) {
 /* ── Batch result row ─────────────────────────────────────────── */
 
 function BatchResultRow({ item, onLoad }) {
+  const [copiedUrl, setCopiedUrl] = useState(false)
+
+  const handleCopyUrl = async (e) => {
+    e.stopPropagation()
+    await navigator.clipboard.writeText(item.url)
+    setCopiedUrl(true)
+    setTimeout(() => setCopiedUrl(false), 2000)
+  }
+
   if (item.status === 'loading') {
     return (
       <div className="batch-row batch-row-loading">
@@ -655,8 +753,10 @@ function BatchResultRow({ item, onLoad }) {
     return (
       <div className="batch-row batch-row-error">
         <span className="batch-status-icon">✗</span>
-        <span className="batch-url">{item.url}</span>
+        <span className="batch-url" title={item.url}>{item.url}</span>
         <span className="batch-status-text">{item.error}</span>
+        {/* UX-06 FIX: copy URL button */}
+        <button className="btn btn-ghost btn-xs" onClick={handleCopyUrl}>{copiedUrl ? '✓' : 'Copy URL'}</button>
       </div>
     )
   }
@@ -674,6 +774,8 @@ function BatchResultRow({ item, onLoad }) {
         {stats.duplicatesRemoved > 0 && <span> · {stats.duplicatesRemoved} dupes</span>}
         {stats.certsAdded > 0 && <span> · {stats.certsAdded} certs added</span>}
       </span>
+      {/* UX-06 FIX: copy URL button on success rows too */}
+      <button className="btn btn-ghost btn-xs" onClick={handleCopyUrl}>{copiedUrl ? '✓' : 'Copy URL'}</button>
       <button className="btn btn-ghost btn-xs batch-load-btn" onClick={onLoad}>Load</button>
     </div>
   )
@@ -681,7 +783,7 @@ function BatchResultRow({ item, onLoad }) {
 
 /* ── Issue card ───────────────────────────────────────────────── */
 
-function IssueCard({ issue, expanded, onToggle, onJumpToLine }) {
+function IssueCard({ issue, expanded, onToggle, onJumpToLine, onApplyFix }) {
   const meta = {
     error:     { label: 'Error',      cls: 'error' },
     warning:   { label: 'Warning',    cls: 'warning' },
@@ -689,9 +791,13 @@ function IssueCard({ issue, expanded, onToggle, onJumpToLine }) {
     filled:    { label: 'Cert added', cls: 'filled' },
   }[issue.severity] ?? { label: issue.severity, cls: 'info' }
 
+  // FEAT: parse suggestion for auto-applicable fixes
+  const fixLine = issue.suggestion?.match(/(?:Change to|Remove invalid characters): (.+)$/)?.[1]
+
   return (
     <div className={`issue issue-${meta.cls}`}>
-      <div className="issue-top" onClick={onToggle}>
+      {/* BUG-09 FIX: use <button> instead of <div> for keyboard accessibility */}
+      <button type="button" className="issue-top" onClick={onToggle}>
         <div className="issue-left">
           <span className={`badge badge-${meta.cls}`}>{meta.label}</span>
           {issue.lineNumber > 0 && (
@@ -706,7 +812,7 @@ function IssueCard({ issue, expanded, onToggle, onJumpToLine }) {
           <span className="issue-message">{issue.message}</span>
         </div>
         <span className="issue-toggle">{expanded ? '▲' : '▼'}</span>
-      </div>
+      </button>
       {expanded && (issue.original || issue.suggestion) && (
         <div className="issue-body">
           {issue.original && (
@@ -720,6 +826,15 @@ function IssueCard({ issue, expanded, onToggle, onJumpToLine }) {
               <span className="suggestion-icon">💡</span>
               <span>{issue.suggestion}</span>
             </div>
+          )}
+          {fixLine && (
+            <button
+              type="button"
+              className="apply-fix-btn"
+              onClick={() => onApplyFix?.(issue, fixLine)}
+            >
+              ↑ Apply fix
+            </button>
           )}
         </div>
       )}
