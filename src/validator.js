@@ -1,8 +1,32 @@
 const DOMAIN_REGEX = /^(?=.{1,253}$)(?!-)[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*\.[a-z]{2,}$/
+const TAG_CERT_REGEX = /^[0-9a-f]{16}$/  // TAG cert IDs are exactly 16 lowercase hex chars
 
 const SUPPORTED_VARIABLES = new Set([
   'CONTACT', 'SUBDOMAIN', 'INVENTORYPARTNERDOMAIN', 'OWNERDOMAIN', 'MANAGERDOMAIN'
 ])
+
+export const TOP_NETWORKS = [
+  { domain: 'google.com',         name: 'Google (Authorized Buyers)' },
+  { domain: 'appnexus.com',       name: 'AppNexus / Xandr' },
+  { domain: 'rubiconproject.com', name: 'Magnite / Rubicon Project' },
+  { domain: 'pubmatic.com',       name: 'PubMatic' },
+  { domain: 'openx.com',         name: 'OpenX' },
+  { domain: 'indexexchange.com',  name: 'Index Exchange' },
+  { domain: 'criteo.com',         name: 'Criteo' },
+  { domain: 'triplelift.com',     name: 'TripleLift' },
+  { domain: 'aps.amazon.com',     name: 'Amazon Publisher Services' },
+  { domain: 'facebook.com',       name: 'Meta Audience Network' },
+  { domain: 'inmobi.com',         name: 'InMobi' },
+  { domain: 'applovin.com',       name: 'AppLovin' },
+  { domain: 'ironsource.com',     name: 'IronSource' },
+  { domain: 'vungle.com',         name: 'Vungle (Liftoff)' },
+  { domain: 'adcolony.com',       name: 'AdColony' },
+  { domain: 'chartboost.com',     name: 'Chartboost' },
+  { domain: 'smaato.com',         name: 'Smaato' },
+  { domain: 'mintegral.com',      name: 'Mintegral' },
+  { domain: 'sovrn.com',          name: 'Sovrn / Lijit' },
+  { domain: 'sharethrough.com',   name: 'Sharethrough' },
+]
 
 // TAG Certified Against Fraud IDs — cert ID → network name
 export const VALID_CA_IDS = {
@@ -143,8 +167,7 @@ export const VALID_CA_IDS = {
   '81cbf0a75a5e0e9a': 'xAd / GroundTruth',
 }
 
-// Domain → cert ID mapping (derived from known TAG certifications + verified from sample files)
-// Source: publicly documented TAG certifications; no free public API exists — TAG registry requires membership
+// Domain → cert ID mapping (derived from known TAG certifications)
 const DOMAIN_TO_CERT = {
   // Google
   'google.com':              'f08c47fec0942fa0',
@@ -300,11 +323,15 @@ export function validateAdsTxt(content) {
   const issues = []
   const inputLineIssues = new Map()
   const seenRecords = new Set()
+  const seenDomains = new Set()
+  const records = []
   const variables = {}
   let totalRecords = 0
   let keptRecords = 0
   let duplicatesRemoved = 0
   let certsAdded = 0
+  let directCount = 0
+  let resellerCount = 0
 
   const pushIssue = (issue) => {
     issues.push(issue)
@@ -326,11 +353,17 @@ export function validateAdsTxt(content) {
       return
     }
 
-    // Variable declarations
-    if (stripped.includes('=') && !stripped.startsWith('http')) {
-      const eqIdx = stripped.indexOf('=')
-      const varName = stripped.slice(0, eqIdx).trim().toUpperCase()
-      const value = stripped.slice(eqIdx + 1).trim()
+    // BUG-03 FIX: Variable declarations only when '=' appears before first comma (or no comma at all).
+    // Previously, records like "foo.com, 1234=abc, DIRECT" would incorrectly route here.
+    const firstComma = stripped.indexOf(',')
+    const firstEquals = stripped.indexOf('=')
+    if (
+      firstEquals !== -1 &&
+      (firstComma === -1 || firstEquals < firstComma) &&
+      !stripped.startsWith('http')
+    ) {
+      const varName = stripped.slice(0, firstEquals).trim().toUpperCase()
+      const value = stripped.slice(firstEquals + 1).trim()
 
       if (!SUPPORTED_VARIABLES.has(varName)) {
         pushIssue({
@@ -380,20 +413,31 @@ export function validateAdsTxt(content) {
         original: stripped,
         suggestion: `Example: google.com, pub-0000000000000000, DIRECT, f08c47fec0942fa0`
       })
+      correctedLines.push(line)
+      outputLineStatuses.push('error')
       return
     }
 
     const domain = parts[0].toLowerCase()
-    const publisherId = parts[1].toLowerCase()
+    // BUG-02 FIX: Preserve original publisher ID case in output; lowercase only for comparison.
+    const publisherIdRaw = parts[1]
+    const publisherIdLower = publisherIdRaw.toLowerCase()
     const relationship = parts[2].toUpperCase()
-    let certId = parts[3] ? parts[3].trim() : ''
+    // BUG-04 FIX: Normalize cert ID to lowercase throughout.
+    const rawCertLower = parts[3] ? parts[3].trim().toLowerCase() : ''
 
-    // Duplicate check
-    const recordKey = `${domain}|${publisherId}|${certId}`
+    // Pre-fill cert for dedup so that "record without cert" and "same record with cert"
+    // are correctly treated as duplicates (previously they'd get different keys).
+    const knownCert = DOMAIN_TO_CERT[domain] ?? ''
+    const certForDedup = rawCertLower || knownCert
+
+    // BUG-01 FIX: Include relationship in duplicate key.
+    // Previously DIRECT and RESELLER for the same domain/publisher were wrongly merged.
+    const recordKey = `${domain}|${publisherIdLower}|${relationship}|${certForDedup}`
     if (seenRecords.has(recordKey)) {
       pushIssue({
         severity: 'duplicate', lineNumber,
-        message: `Duplicate removed: ${domain}, ${publisherId}${certId ? ', ' + certId : ''}.`,
+        message: `Duplicate removed: ${domain}, ${publisherIdRaw}, ${relationship}${certForDedup ? ', ' + certForDedup : ''}.`,
         original: stripped,
         suggestion: null
       })
@@ -401,8 +445,10 @@ export function validateAdsTxt(content) {
       return
     }
     seenRecords.add(recordKey)
+    seenDomains.add(domain)
 
     const lineIssues = []
+    let certId = rawCertLower
     let certWasFilled = false
 
     if (!DOMAIN_REGEX.test(domain)) {
@@ -414,7 +460,7 @@ export function validateAdsTxt(content) {
       })
     }
 
-    if (!publisherId) {
+    if (!publisherIdRaw.trim()) {
       lineIssues.push({
         severity: 'error', lineNumber,
         message: `Empty publisher account ID (field 2).`,
@@ -431,21 +477,24 @@ export function validateAdsTxt(content) {
         message: `Invalid relationship '${relationship}' — must be DIRECT or RESELLER.`,
         original: stripped,
         suggestion: guess
-          ? `Change to: ${domain}, ${publisherId}, ${guess}${certId ? ', ' + certId : ''}`
+          ? `Change to: ${domain}, ${publisherIdRaw}, ${guess}${certId ? ', ' + certId : ''}`
           : `Replace '${parts[2]}' with either DIRECT or RESELLER.`
       })
+    } else {
+      if (relationship === 'DIRECT') directCount++
+      else resellerCount++
     }
 
     if (certId) {
-      if (!/^[a-zA-Z0-9_-]+$/.test(certId)) {
-        const cleaned = certId.replace(/[^a-zA-Z0-9_-]/g, '')
+      // Stricter validation: TAG cert IDs must be exactly 16 lowercase hex characters.
+      if (!TAG_CERT_REGEX.test(certId)) {
         lineIssues.push({
           severity: 'error', lineNumber,
-          message: `Cert ID '${certId}' contains invalid characters.`,
+          message: `Cert ID '${certId}' is invalid — TAG cert IDs must be exactly 16 lowercase hex characters.`,
           original: stripped,
-          suggestion: `Remove invalid characters: ${domain}, ${publisherId}, ${relationship}, ${cleaned}`
+          suggestion: `Verify the cert ID with your ad network or remove it if uncertain.`
         })
-      } else if (!VALID_CA_IDS[certId.toLowerCase()]) {
+      } else if (!VALID_CA_IDS[certId]) {
         lineIssues.push({
           severity: 'warning', lineNumber,
           message: `Cert ID '${certId}' not found in known TAG registry — may still be valid.`,
@@ -453,20 +502,16 @@ export function validateAdsTxt(content) {
           suggestion: `Verify this cert ID with the ad network directly.`
         })
       }
-    } else {
-      // Try to fill missing cert ID from known domain mapping
-      const knownCert = DOMAIN_TO_CERT[domain]
-      if (knownCert) {
-        certId = knownCert
-        certWasFilled = true
-        certsAdded++
-        lineIssues.push({
-          severity: 'filled', lineNumber,
-          message: `Cert ID added: ${knownCert} — ${VALID_CA_IDS[knownCert]}.`,
-          original: stripped,
-          suggestion: null
-        })
-      }
+    } else if (knownCert) {
+      certId = knownCert
+      certWasFilled = true
+      certsAdded++
+      lineIssues.push({
+        severity: 'filled', lineNumber,
+        message: `Cert ID added: ${knownCert} — ${VALID_CA_IDS[knownCert]}.`,
+        original: stripped,
+        suggestion: null
+      })
     }
 
     lineIssues.forEach(i => pushIssue(i))
@@ -474,19 +519,25 @@ export function validateAdsTxt(content) {
     const worstLineSeverity = lineIssues.reduce((w, i) => worstOf(w, i.severity), null)
 
     const wasCorrected = !certWasFilled && (
-      parts[0] !== domain || parts[1] !== publisherId || parts[2] !== relationship
+      parts[0] !== domain ||
+      parts[2] !== relationship ||
+      (parts[3] && parts[3].trim() !== certId)
     )
 
     keptRecords++
-    const recordParts = [domain, publisherId, relationship]
+    // BUG-02 FIX: Use publisherIdRaw (original case) in output, not lowercased version.
+    const recordParts = [domain, publisherIdRaw, relationship]
     if (certId) recordParts.push(certId)
     correctedLines.push(recordParts.join(', ') + extensionData)
     outputLineStatuses.push(worstLineSeverity ?? (wasCorrected ? 'corrected' : null))
+
+    records.push({ domain, publisherId: publisherIdRaw, relationship, certId, extensions: extensionData, lineNumber })
   })
 
+  // BUG-05 FIX: Use lineNumber -1 (not 0) so the "Line 0" label never renders in the UI.
   if (totalRecords === 0 && Object.keys(variables).length === 0) {
     pushIssue({
-      severity: 'error', lineNumber: 0,
+      severity: 'error', lineNumber: -1,
       message: 'File contains no valid data records or variable declarations.',
       original: '',
       suggestion: `Each record should follow: domain.com, PUBLISHER_ID, DIRECT|RESELLER[, CERT_ID]`
@@ -498,13 +549,20 @@ export function validateAdsTxt(content) {
     outputLineStatuses,
     inputLineIssues,
     issues,
+    records,
     stats: {
       totalRecords,
       keptRecords,
       errors: issues.filter(i => i.severity === 'error').length,
       warnings: issues.filter(i => i.severity === 'warning').length,
       duplicatesRemoved,
-      certsAdded
+      certsAdded,
+      directCount,
+      resellerCount,
+    },
+    coverage: {
+      present: TOP_NETWORKS.filter(n => seenDomains.has(n.domain)),
+      missing: TOP_NETWORKS.filter(n => !seenDomains.has(n.domain)),
     }
   }
 }
