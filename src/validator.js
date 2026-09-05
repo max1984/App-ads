@@ -5,6 +5,9 @@ const SUPPORTED_VARIABLES = new Set([
   'CONTACT', 'SUBDOMAIN', 'INVENTORYPARTNERDOMAIN', 'OWNERDOMAIN', 'MANAGERDOMAIN'
 ])
 
+// These variables must hold a bare domain per the IAB spec (CONTACT may be an email/URL, so it's excluded).
+const DOMAIN_VARIABLES = new Set(['SUBDOMAIN', 'INVENTORYPARTNERDOMAIN', 'OWNERDOMAIN', 'MANAGERDOMAIN'])
+
 export const TOP_NETWORKS = [
   { domain: 'google.com',         name: 'Google (Authorized Buyers)' },
   { domain: 'appnexus.com',       name: 'AppNexus / Xandr' },
@@ -387,8 +390,25 @@ export function validateAdsTxt(content) {
         })
       }
 
-      variables[varName] = value
-      const corrected = `${varName}=${value}`
+      // *DOMAIN variables must be a bare lowercase domain — strip scheme/path/case silently,
+      // same as we do for record domains, and only raise an issue if it's still malformed.
+      let outValue = value
+      if (DOMAIN_VARIABLES.has(varName) && value) {
+        const schemeStripped = value.replace(/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//, '')
+        const bareValue = schemeStripped.split(/[\/?#\s]/)[0]
+        outValue = bareValue.toLowerCase()
+        if (!outValue || !DOMAIN_REGEX.test(outValue)) {
+          pushIssue({
+            severity: 'error', lineNumber,
+            message: `${varName} value '${value}' doesn't look like a valid domain.`,
+            original: stripped,
+            suggestion: `Use a bare domain such as 'example.com' — no scheme, path, spaces, or port.`
+          })
+        }
+      }
+
+      variables[varName] = outValue
+      const corrected = `${varName}=${outValue}`
       correctedLines.push(corrected)
       outputLineStatuses.push(corrected !== stripped ? 'corrected' : null)
       return
@@ -551,6 +571,15 @@ export function validateAdsTxt(content) {
       original: '',
       suggestion: `Each record should follow: domain.com, PUBLISHER_ID, DIRECT|RESELLER[, CERT_ID]`
     })
+  } else if (!variables.OWNERDOMAIN) {
+    // IAB Tech Lab recommends declaring OWNERDOMAIN on every app-ads.txt file, even when it
+    // matches the hosting domain, so buyers can verify inventory ownership without a mismatch.
+    pushIssue({
+      severity: 'warning', lineNumber: -1,
+      message: 'No OWNERDOMAIN declared.',
+      original: '',
+      suggestion: `IAB Tech Lab recommends adding OWNERDOMAIN=yourdomain.com (near the top, one line) even if it's the same domain this file is hosted on — it lets buyers verify you control the inventory and avoids requests being filtered over identity mismatches. If a separate company manages your ad stack, also add MANAGERDOMAIN=theirdomain.com.`
+    })
   }
 
   return {
@@ -560,6 +589,7 @@ export function validateAdsTxt(content) {
     issues,
     records,
     changes,
+    variables,
     stats: {
       totalRecords,
       keptRecords,
@@ -575,4 +605,48 @@ export function validateAdsTxt(content) {
       missing: TOP_NETWORKS.filter(n => !seenDomains.has(n.domain)),
     }
   }
+}
+
+// Compares two app-ads.txt snapshots by record identity (domain + publisher ID + relationship),
+// not by line position — matching how tools like ads.txt Guru / programmatic.expert report
+// "sellers added/dropped" between crawls, since record order in the file carries no meaning.
+export function compareSnapshots(oldContent, newContent) {
+  const oldResult = validateAdsTxt(oldContent || '')
+  const newResult = validateAdsTxt(newContent || '')
+
+  const keyOf = (r) => `${r.domain}|${r.publisherId.toLowerCase()}|${r.relationship}`
+  const oldMap = new Map(oldResult.records.map(r => [keyOf(r), r]))
+  const newMap = new Map(newResult.records.map(r => [keyOf(r), r]))
+
+  const added = [], removed = [], certChanged = []
+  for (const [key, r] of newMap) {
+    if (!oldMap.has(key)) { added.push(r); continue }
+    const prev = oldMap.get(key)
+    if ((prev.certId || '') !== (r.certId || '')) certChanged.push({ before: prev, after: r })
+  }
+  for (const [key, r] of oldMap) {
+    if (!newMap.has(key)) removed.push(r)
+  }
+
+  const varNames = new Set([...Object.keys(oldResult.variables), ...Object.keys(newResult.variables)])
+  const variablesAdded = [], variablesRemoved = [], variablesChanged = []
+  for (const name of varNames) {
+    const before = oldResult.variables[name]
+    const after = newResult.variables[name]
+    if (before === undefined && after !== undefined) variablesAdded.push({ name, value: after })
+    else if (before !== undefined && after === undefined) variablesRemoved.push({ name, value: before })
+    else if (before !== after) variablesChanged.push({ name, before, after })
+  }
+
+  return {
+    added, removed, certChanged,
+    variablesAdded, variablesRemoved, variablesChanged,
+    oldStats: oldResult.stats,
+    newStats: newResult.stats,
+    unchanged: newMap.size - added.length - certChanged.length,
+  }
+}
+
+export function formatRecordLine(r) {
+  return `${r.domain}, ${r.publisherId}, ${r.relationship}${r.certId ? ', ' + r.certId : ''}`
 }

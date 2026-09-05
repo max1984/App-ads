@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect, useMemo, forwardRef, useImperativeHandle } from 'react'
-import { validateAdsTxt, TOP_NETWORKS, DOMAIN_TO_CERT } from './validator'
+import { validateAdsTxt, TOP_NETWORKS, DOMAIN_TO_CERT, compareSnapshots, formatRecordLine } from './validator'
 import './App.css'
 
 const PLACEHOLDER = `# Paste your app-ads.txt content here
@@ -9,6 +9,32 @@ google.com, pub-0000000000000000, DIRECT, f08c47fec0942fa0
 appnexus.com, 1234, RESELLER, f5ab79cb980f11d1`
 
 const LARGE_FILE_THRESHOLD = 2000
+const VERSIONS_KEY = 'app-ads-versions'
+const MAX_VERSIONS = 30
+
+function loadVersions() {
+  try {
+    const raw = localStorage.getItem(VERSIONS_KEY)
+    const parsed = raw ? JSON.parse(raw) : []
+    return Array.isArray(parsed) ? parsed : []
+  } catch { return [] }
+}
+
+function persistVersions(list) {
+  try { localStorage.setItem(VERSIONS_KEY, JSON.stringify(list)) } catch { /* storage unavailable */ }
+}
+
+function formatVersionTime(ts) {
+  const diffMs = Date.now() - ts
+  const min = Math.floor(diffMs / 60000)
+  if (min < 1) return 'just now'
+  if (min < 60) return `${min}m ago`
+  const hr = Math.floor(min / 60)
+  if (hr < 24) return `${hr}h ago`
+  const days = Math.floor(hr / 24)
+  if (days < 7) return `${days}d ago`
+  return new Date(ts).toLocaleDateString()
+}
 
 // BUG-08 FIX: replace deprecated escape/unescape with TextEncoder/TextDecoder
 function encodeShare(str) {
@@ -71,11 +97,17 @@ export default function App() {
   const [batchInput, setBatchInput] = useState('')
   const [batchResults, setBatchResults] = useState([])
   const [batchLoading, setBatchLoading] = useState(false)
+  const [showVersions, setShowVersions] = useState(false)
+  const [versions, setVersions] = useState(() => loadVersions())
+  const [compareId, setCompareId] = useState(null)
+  const [versionDiff, setVersionDiff] = useState(null)
+  const [savedFlash, setSavedFlash] = useState(false)
   const [darkMode, setDarkMode] = useState(
     () => window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false
   )
 
   const fileInputRef = useRef()
+  const versionFileInputRef = useRef()
   const inputEditorRef = useRef()
   const validateTimerRef = useRef()
   const batchGenRef = useRef(0)  // BUG-06 FIX: generation counter for race condition
@@ -176,6 +208,89 @@ export default function App() {
       }))
     )
     if (batchGenRef.current === gen) setBatchLoading(false)
+  }
+
+  // VERSIONING: keep the open comparison live as the input changes
+  useEffect(() => {
+    if (!compareId) return
+    const v = versions.find(x => x.id === compareId)
+    if (!v) { setCompareId(null); setVersionDiff(null); return }
+    setVersionDiff(compareSnapshots(v.content, input))
+  }, [input, compareId, versions])
+
+  const handleSaveVersion = () => {
+    if (!input.trim()) return
+    if (versions[0]?.content === input) return  // no changes since last save
+    const entry = {
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      label: `Version ${versions.length + 1}`,
+      timestamp: Date.now(),
+      content: input,
+      stats: result?.stats
+        ? { keptRecords: result.stats.keptRecords, errors: result.stats.errors, warnings: result.stats.warnings }
+        : null,
+    }
+    const next = [entry, ...versions].slice(0, MAX_VERSIONS)
+    setVersions(next)
+    persistVersions(next)
+    setSavedFlash(true)
+    setTimeout(() => setSavedFlash(false), 2000)
+  }
+
+  const handleRenameVersion = (id) => {
+    const v = versions.find(x => x.id === id)
+    if (!v) return
+    const label = window.prompt('Version name:', v.label)
+    if (!label || !label.trim()) return
+    const next = versions.map(x => x.id === id ? { ...x, label: label.trim() } : x)
+    setVersions(next)
+    persistVersions(next)
+  }
+
+  const handleDeleteVersion = (id) => {
+    const next = versions.filter(v => v.id !== id)
+    setVersions(next)
+    persistVersions(next)
+    if (compareId === id) { setCompareId(null); setVersionDiff(null) }
+  }
+
+  const handleRestoreVersion = (v) => {
+    loadText(v.content)
+    setCompareId(null)
+    setVersionDiff(null)
+  }
+
+  const handleCompareVersion = (v) => {
+    setCompareId(prev => prev === v.id ? null : v.id)
+    if (compareId !== v.id) setVersionDiff(compareSnapshots(v.content, input))
+    else setVersionDiff(null)
+  }
+
+  const handleExportVersions = () => {
+    if (!versions.length) return
+    const blob = new Blob([JSON.stringify(versions, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = 'app-ads-versions.json'; a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const handleImportVersions = (file) => {
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      try {
+        const imported = JSON.parse(e.target.result)
+        if (!Array.isArray(imported)) return
+        const existingIds = new Set(versions.map(v => v.id))
+        const merged = [...versions, ...imported.filter(v => v?.id && v?.content && !existingIds.has(v.id))]
+          .sort((a, b) => b.timestamp - a.timestamp)
+          .slice(0, MAX_VERSIONS)
+        setVersions(merged)
+        persistVersions(merged)
+      } catch { /* ignore malformed import */ }
+    }
+    reader.readAsText(file, 'utf-8')
   }
 
   const { displayContent, displayStatuses, sortedRecords } = useMemo(() => {
@@ -361,6 +476,16 @@ export default function App() {
           <span className="batch-toggle-hint">Validate multiple app-ads.txt files at once</span>
         </div>
 
+        <div className="batch-toggle-row">
+          <button
+            className={`btn btn-ghost btn-sm${showVersions ? ' btn-active' : ''}`}
+            onClick={() => setShowVersions(v => !v)}
+          >
+            {showVersions ? '▲' : '▼'} Version history{versions.length > 0 ? ` (${versions.length})` : ''}
+          </button>
+          <span className="batch-toggle-hint">Save snapshots as you edit, then compare or restore any earlier version</span>
+        </div>
+
         {urlError && <p className="url-error">{urlError}</p>}
         {loadedUrl && !urlError && (
           <p className="loaded-url">
@@ -401,6 +526,54 @@ export default function App() {
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {/* VERSION HISTORY */}
+        {showVersions && (
+          <div className="versions-panel">
+            <div className="batch-header">
+              <span className="panel-title">Version History</span>
+              <p className="batch-hint">Snapshots are saved locally in this browser — nothing leaves your machine.</p>
+            </div>
+            <div className="batch-actions">
+              <button className="btn btn-primary" onClick={handleSaveVersion} disabled={!input.trim() || versions[0]?.content === input}>
+                {savedFlash ? '✓ Saved!' : 'Save current as version'}
+              </button>
+              {versions.length > 0 && (
+                <>
+                  <button className="btn btn-ghost" onClick={handleExportVersions}>Export history</button>
+                  <button className="btn btn-ghost" onClick={() => versionFileInputRef.current.click()}>Import history</button>
+                </>
+              )}
+              <input
+                ref={versionFileInputRef}
+                type="file"
+                accept=".json,application/json"
+                hidden
+                onChange={e => { handleImportVersions(e.target.files[0]); e.target.value = '' }}
+              />
+            </div>
+
+            {versions.length === 0 ? (
+              <p className="versions-empty">No saved versions yet — click "Save current as version" to start tracking changes over time.</p>
+            ) : (
+              <div className="versions-list">
+                {versions.map(v => (
+                  <VersionRow
+                    key={v.id}
+                    version={v}
+                    isComparing={compareId === v.id}
+                    onRestore={() => handleRestoreVersion(v)}
+                    onCompare={() => handleCompareVersion(v)}
+                    onRename={() => handleRenameVersion(v.id)}
+                    onDelete={() => handleDeleteVersion(v.id)}
+                  />
+                ))}
+              </div>
+            )}
+
+            {versionDiff && <VersionDiffView diff={versionDiff} />}
           </div>
         )}
 
@@ -838,6 +1011,79 @@ function IssueCard({ issue, expanded, onToggle, onJumpToLine, onApplyFix }) {
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+/* ── Version history ──────────────────────────────────────────── */
+
+function VersionRow({ version, isComparing, onRestore, onCompare, onRename, onDelete }) {
+  const s = version.stats
+  return (
+    <div className={`version-row${isComparing ? ' version-row-active' : ''}`}>
+      <div className="version-info">
+        <button type="button" className="version-label" onClick={onRename} title="Click to rename">
+          {version.label}
+        </button>
+        <span className="version-time">{formatVersionTime(version.timestamp)}</span>
+        {s && (
+          <span className="version-stats">
+            {s.keptRecords} records
+            {s.errors > 0 && <span className="batch-stat-error"> · {s.errors} errors</span>}
+            {s.warnings > 0 && <span className="batch-stat-warning"> · {s.warnings} warnings</span>}
+          </span>
+        )}
+      </div>
+      <div className="version-actions">
+        <button className={`btn btn-ghost btn-xs${isComparing ? ' btn-active' : ''}`} onClick={onCompare}>
+          {isComparing ? '✓ Comparing' : 'Compare to current'}
+        </button>
+        <button className="btn btn-ghost btn-xs" onClick={onRestore}>Restore</button>
+        <button className="btn btn-ghost btn-xs version-delete" onClick={onDelete}>Delete</button>
+      </div>
+    </div>
+  )
+}
+
+function VersionDiffView({ diff }) {
+  const { added, removed, certChanged, variablesAdded, variablesRemoved, variablesChanged, unchanged } = diff
+  const hasChanges = added.length || removed.length || certChanged.length ||
+    variablesAdded.length || variablesRemoved.length || variablesChanged.length
+
+  if (!hasChanges) {
+    return <p className="versions-empty">No differences — this version matches the current input ({unchanged} records unchanged).</p>
+  }
+
+  return (
+    <div className="version-diff">
+      <div className="version-diff-summary">
+        {added.length > 0 && <span className="diff-pill pill-filled">+{added.length} added</span>}
+        {removed.length > 0 && <span className="diff-pill pill-dupe">−{removed.length} removed</span>}
+        {certChanged.length > 0 && <span className="diff-pill pill-corrected">{certChanged.length} cert changed</span>}
+        <span className="version-diff-unchanged">{unchanged} unchanged</span>
+      </div>
+      <div className="version-diff-list">
+        {variablesRemoved.map(({ name, value }) => (
+          <code key={`vr-${name}`} className="version-diff-line diff-row-dupe">− {name}={value}</code>
+        ))}
+        {variablesAdded.map(({ name, value }) => (
+          <code key={`va-${name}`} className="version-diff-line diff-row-filled">+ {name}={value}</code>
+        ))}
+        {variablesChanged.map(({ name, before, after }) => (
+          <code key={`vc-${name}`} className="version-diff-line diff-row-corrected">± {name}: {before} → {after}</code>
+        ))}
+        {removed.map((r, i) => (
+          <code key={`r-${i}`} className="version-diff-line diff-row-dupe">− {formatRecordLine(r)}</code>
+        ))}
+        {added.map((r, i) => (
+          <code key={`a-${i}`} className="version-diff-line diff-row-filled">+ {formatRecordLine(r)}</code>
+        ))}
+        {certChanged.map(({ before, after }, i) => (
+          <code key={`c-${i}`} className="version-diff-line diff-row-corrected">
+            ± {after.domain}, {after.publisherId}, {after.relationship}: {before.certId || '(none)'} → {after.certId || '(none)'}
+          </code>
+        ))}
+      </div>
     </div>
   )
 }

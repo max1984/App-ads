@@ -865,6 +865,119 @@
 }
 .help-link:hover { background: var(--bg); color: var(--text); }
 
+/* ── Version history panel ──────────────────────────────────── */
+.versions-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.versions-empty {
+  padding: 14px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.versions-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.version-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.version-row:last-child { border-bottom: none; }
+.version-row-active { background: color-mix(in srgb, var(--primary) 8%, transparent); }
+
+.version-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.version-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+}
+.version-label:hover { color: var(--primary); text-decoration: underline; }
+
+.version-time {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.version-stats {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.version-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.version-delete:hover { color: var(--error-color); border-color: var(--error-border); }
+
+.version-diff {
+  border-top: 1px solid var(--border);
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.version-diff-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.version-diff-unchanged {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.version-diff-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.version-diff-line {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  word-break: break-all;
+  white-space: pre-wrap;
+}
+.version-diff-line.diff-row-dupe      { background: var(--dupe-bg);    color: var(--dupe-color); }
+.version-diff-line.diff-row-filled    { background: var(--filled-bg);  color: var(--filled-color); }
+.version-diff-line.diff-row-corrected { background: var(--success-bg); color: var(--success-color); }
+
 /* ── Apply fix button ────────────────────────────────────────── */
 .apply-fix-btn {
   align-self: flex-start;
