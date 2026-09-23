@@ -450,6 +450,7 @@ export default function App() {
           <button
             className={`btn btn-ghost btn-sm${showBatch ? ' btn-active' : ''}`}
             onClick={() => setShowBatch(v => !v)}
+            aria-expanded={showBatch}
           >
             {showBatch ? '▲' : '▼'} Batch URL check
           </button>
@@ -460,6 +461,7 @@ export default function App() {
           <button
             className={`btn btn-ghost btn-sm${showVersions ? ' btn-active' : ''}`}
             onClick={() => setShowVersions(v => !v)}
+            aria-expanded={showVersions}
           >
             {showVersions ? '▲' : '▼'} Version history{versions.length > 0 ? ` (${versions.length})` : ''}
           </button>
@@ -672,7 +674,7 @@ export default function App() {
         {/* DIFF / CHANGES VIEW */}
         {result && result.changes.length > 0 && (
           <div className="diff-panel">
-            <button className="diff-toggle" onClick={() => setShowDiff(v => !v)}>
+            <button className="diff-toggle" onClick={() => setShowDiff(v => !v)} aria-expanded={showDiff}>
               <span className="panel-title">Changes</span>
               <span className="diff-summary">
                 {result.changes.filter(c => c.type === 'duplicate').length > 0 &&
@@ -751,7 +753,7 @@ export default function App() {
         {/* NETWORK COVERAGE */}
         {result && result.stats.totalRecords > 0 && (
           <div className="coverage-panel">
-            <button className="coverage-toggle" onClick={() => setShowCoverage(v => !v)}>
+            <button className="coverage-toggle" onClick={() => setShowCoverage(v => !v)} aria-expanded={showCoverage}>
               <span className="panel-title">Network Coverage</span>
               <span className="coverage-summary">
                 {result.coverage.present.length} / {TOP_NETWORKS.length} top networks present
@@ -961,7 +963,7 @@ function IssueCard({ issue, expanded, onToggle, onJumpToLine, onApplyFix }) {
   return (
     <div className={`issue issue-${meta.cls}`}>
       {/* BUG-09 FIX: use <button> instead of <div> for keyboard accessibility */}
-      <button type="button" className="issue-top" onClick={onToggle}>
+      <button type="button" className="issue-top" onClick={onToggle} aria-expanded={expanded}>
         <div className="issue-left">
           <span className={`badge badge-${meta.cls}`}>{meta.label}</span>
           {issue.lineNumber > 0 && (

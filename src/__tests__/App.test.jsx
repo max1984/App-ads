@@ -52,3 +52,13 @@ describe('App', () => {
     expect(alertSpy).not.toHaveBeenCalled()
   })
 })
+
+describe('App — accessibility', () => {
+  it('exposes expanded state on collapsible toggles', () => {
+    render(<App />)
+    const batch = screen.getByRole('button', { name: /Batch URL check/ })
+    expect(batch.getAttribute('aria-expanded')).toBe('false')
+    fireEvent.click(batch)
+    expect(batch.getAttribute('aria-expanded')).toBe('true')
+  })
+})

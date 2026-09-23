@@ -86,3 +86,13 @@ body {
   font-size: 14px;
   line-height: 1.5;
 }
+
+/* Visible keyboard focus for every interactive element (mouse clicks stay ring-free). */
+:where(button, a, summary, input[type="checkbox"], [tabindex]):focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+:where(textarea, input[type="url"], input[type="text"]):focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--primary);
+}
