@@ -128,3 +128,25 @@ describe('formatRecordLine', () => {
     expect(formatRecordLine({ domain: 'a.com', publisherId: '1', relationship: 'DIRECT', certId: 'x' })).toBe('a.com, 1, DIRECT, x')
   })
 })
+
+describe('validateAdsTxt — inline comments & extra fields', () => {
+  it('parses records with trailing # comments and keeps the comment', () => {
+    const r = validateAdsTxt(OWNER + 'google.com, pub-1, DIRECT # main account')
+    expect(r.stats.errors).toBe(0)
+    expect(r.records[0].relationship).toBe('DIRECT')
+    expect(r.cleanedContent.split('\n')[1]).toBe('google.com, pub-1, DIRECT, f08c47fec0942fa0 # main account')
+  })
+
+  it('parses variables with trailing # comments', () => {
+    const r = validateAdsTxt('OWNERDOMAIN=a.com # owner\nfoo.com, 1, DIRECT')
+    expect(r.variables.OWNERDOMAIN).toBe('a.com')
+    expect(r.cleanedContent.split('\n')[0]).toBe('OWNERDOMAIN=a.com # owner')
+    expect(r.outputLineStatuses[0]).toBeNull()
+  })
+
+  it('warns about and drops fields beyond the 4th', () => {
+    const r = validateAdsTxt(OWNER + 'foo.com, 1, DIRECT, 0123456789abcdef, extra')
+    expect(r.issues.some(i => /Extra fields removed: 'extra'/.test(i.message))).toBe(true)
+    expect(r.cleanedContent.split('\n')[1]).toBe('foo.com, 1, DIRECT, 0123456789abcdef')
+  })
+})

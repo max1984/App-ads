@@ -357,17 +357,23 @@ export function validateAdsTxt(content) {
       return
     }
 
+    // Per IAB spec a '#' anywhere starts a comment. Parse only the part before it and
+    // re-attach the comment to the cleaned line so annotations survive.
+    const hashIdx = stripped.indexOf('#')
+    const body = hashIdx === -1 ? stripped : stripped.slice(0, hashIdx).trim()
+    const inlineComment = hashIdx === -1 ? '' : ' ' + stripped.slice(hashIdx)
+
     // BUG-03 FIX: Variable declarations only when '=' appears before first comma (or no comma at all).
     // Previously, records like "foo.com, 1234=abc, DIRECT" would incorrectly route here.
-    const firstComma = stripped.indexOf(',')
-    const firstEquals = stripped.indexOf('=')
+    const firstComma = body.indexOf(',')
+    const firstEquals = body.indexOf('=')
     if (
       firstEquals !== -1 &&
       (firstComma === -1 || firstEquals < firstComma) &&
-      !stripped.startsWith('http')
+      !body.startsWith('http')
     ) {
-      const varName = stripped.slice(0, firstEquals).trim().toUpperCase()
-      const value = stripped.slice(firstEquals + 1).trim()
+      const varName = body.slice(0, firstEquals).trim().toUpperCase()
+      const value = body.slice(firstEquals + 1).trim()
 
       if (!SUPPORTED_VARIABLES.has(varName)) {
         pushIssue({
@@ -409,8 +415,8 @@ export function validateAdsTxt(content) {
 
       variables[varName] = outValue
       const corrected = `${varName}=${outValue}`
-      correctedLines.push(corrected)
-      outputLineStatuses.push(corrected !== stripped ? 'corrected' : null)
+      correctedLines.push(corrected + inlineComment)
+      outputLineStatuses.push(corrected !== body ? 'corrected' : null)
       return
     }
 
@@ -418,11 +424,11 @@ export function validateAdsTxt(content) {
     totalRecords++
 
     let extensionData = ''
-    let mainPart = stripped
-    if (stripped.includes(';')) {
-      const semiIdx = stripped.indexOf(';')
-      mainPart = stripped.slice(0, semiIdx)
-      extensionData = stripped.slice(semiIdx)
+    let mainPart = body
+    if (body.includes(';')) {
+      const semiIdx = body.indexOf(';')
+      mainPart = body.slice(0, semiIdx)
+      extensionData = body.slice(semiIdx)
     }
 
     const parts = mainPart.split(',').map(p => p.trim())
@@ -471,6 +477,15 @@ export function validateAdsTxt(content) {
 
     const lineIssues = []
     let certId = rawCertLower
+
+    if (parts.length > 4) {
+      lineIssues.push({
+        severity: 'warning', lineNumber,
+        message: `Extra fields removed: '${parts.slice(4).join(', ')}' — records allow at most 4 fields.`,
+        original: stripped,
+        suggestion: `Put extension data after a semicolon (e.g. '...; extra') or move notes into a '#' comment.`
+      })
+    }
     let certWasFilled = false
 
     if (!DOMAIN_REGEX.test(domain)) {
@@ -543,14 +558,15 @@ export function validateAdsTxt(content) {
     const wasCorrected = !certWasFilled && (
       parts[0] !== domain ||
       parts[2] !== relationship ||
-      (parts[3] && parts[3].trim() !== certId)
+      (parts[3] && parts[3].trim() !== certId) ||
+      parts.length > 4
     )
 
     keptRecords++
     // BUG-02 FIX: Use publisherIdRaw (original case) in output, not lowercased version.
     const recordParts = [domain, publisherIdRaw, relationship]
     if (certId) recordParts.push(certId)
-    const cleanedLine = recordParts.join(', ') + extensionData
+    const cleanedLine = recordParts.join(', ') + extensionData + inlineComment
     correctedLines.push(cleanedLine)
     outputLineStatuses.push(worstLineSeverity ?? (wasCorrected ? 'corrected' : null))
 
