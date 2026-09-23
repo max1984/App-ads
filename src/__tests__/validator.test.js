@@ -205,3 +205,29 @@ describe('computeHealthScore', () => {
     expect(computeHealthScore({ totalRecords: 50, errors: 20, warnings: 20, duplicatesRemoved: 20 })).toEqual({ score: 0, grade: 'F' })
   })
 })
+
+describe('validateAdsTxt — cert ID mismatch', () => {
+  it('warns when a known domain uses another network\'s cert, with an applicable fix', () => {
+    const r = validateAdsTxt(OWNER + 'google.com, pub-1, DIRECT, c3e20eee3f780d68')
+    const w = r.issues.find(i => /belongs to Meta/.test(i.message))
+    expect(w.severity).toBe('warning')
+    expect(w.suggestion).toBe('Change to: google.com, pub-1, DIRECT, f08c47fec0942fa0')
+  })
+
+  it('accepts alternate certs of the same company', () => {
+    const r = validateAdsTxt(OWNER + 'criteo.com, 1, DIRECT, 3fd707be9c4527c3')
+    expect(r.stats.warnings).toBe(0)
+  })
+
+  it('does not warn for the expected cert', () => {
+    const r = validateAdsTxt(OWNER + 'google.com, pub-1, DIRECT, f08c47fec0942fa0')
+    expect(r.stats.warnings).toBe(0)
+  })
+})
+
+describe('validateAdsTxt — cert ID mismatch (same company)', () => {
+  it('does not warn when the cert belongs to another product of the same company', () => {
+    const r = validateAdsTxt(OWNER + 'google.com, pub-1, DIRECT, 7842df1d2fe2db34')
+    expect(r.stats.warnings).toBe(0)
+  })
+})

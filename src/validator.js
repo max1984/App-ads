@@ -319,6 +319,11 @@ function worstOf(a, b) {
   return SEVERITY_RANK[a] >= SEVERITY_RANK[b] ? a : b
 }
 
+// 'Google AdSense / AdMob' and 'Google (Authorized Buyers)' are the same company.
+function companyOf(name) {
+  return name.split(/[\s(/]/)[0].toLowerCase()
+}
+
 // Strips scheme, path, query and case: 'https://Google.com/x' → 'google.com'.
 function toBareDomain(value) {
   const schemeStripped = value.trim().replace(/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//, '')
@@ -556,6 +561,18 @@ export function validateAdsTxt(content) {
           message: `Cert ID '${certId}' is invalid — TAG cert IDs must be exactly 16 lowercase hex characters.`,
           original: stripped,
           suggestion: `Verify the cert ID with your ad network or remove it if uncertain.`
+        })
+      } else if (
+        knownCert && certId !== knownCert && VALID_CA_IDS[certId] &&
+        companyOf(VALID_CA_IDS[certId]) !== companyOf(VALID_CA_IDS[knownCert])
+      ) {
+        // The cert is real but belongs to a different company than this ad system — almost
+        // always a copy-paste slip from a neighbouring line.
+        lineIssues.push({
+          severity: 'warning', lineNumber,
+          message: `Cert ID '${certId}' belongs to ${VALID_CA_IDS[certId]}, but ${domain} uses ${knownCert} (${VALID_CA_IDS[knownCert]}).`,
+          original: stripped,
+          suggestion: `Change to: ${domain}, ${publisherIdRaw}, ${relationship}, ${knownCert}${extensionData}${inlineComment}`
         })
       } else if (!VALID_CA_IDS[certId]) {
         lineIssues.push({
