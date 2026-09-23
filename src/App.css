@@ -267,6 +267,30 @@
 /* ── Stats ───────────────────────────────────────────────────── */
 .stats-row { gap: 12px; }
 
+.health-badge {
+  display: inline-flex;
+  align-items: stretch;
+  border-radius: 6px;
+  overflow: hidden;
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  line-height: 1;
+  border: 1px solid var(--health-color);
+  color: var(--health-color);
+}
+.health-grade {
+  padding: 4px 7px;
+  font-weight: 800;
+  background: var(--health-color);
+  color: var(--bg);
+}
+.health-score { padding: 4px 7px; font-weight: 600; }
+.health-a { --health-color: var(--success-text); }
+.health-b { --health-color: var(--success-border); }
+.health-c { --health-color: var(--warning-color); }
+.health-d { --health-color: var(--error-border); }
+.health-f { --health-color: var(--error-color); }
+
 .stat          { font-size: 13px; color: var(--text-muted); }
 .stat strong   { color: var(--text); }
 .stat-muted    { opacity: 0.75; }

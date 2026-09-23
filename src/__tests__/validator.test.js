@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { validateAdsTxt, compareSnapshots, formatRecordLine } from '../validator.js'
+import { validateAdsTxt, compareSnapshots, formatRecordLine, computeHealthScore } from '../validator.js'
 
 const OWNER = 'OWNERDOMAIN=example.com\n'
 
@@ -188,5 +188,20 @@ describe('validateAdsTxt — publisher ID whitespace & duplicate variables', () 
   it('keeps repeated variables with different values', () => {
     const r = validateAdsTxt('OWNERDOMAIN=a.com\nCONTACT=a@a.com\nCONTACT=b@b.com\nfoo.com, 1, DIRECT')
     expect(r.stats.duplicatesRemoved).toBe(0)
+  })
+})
+
+describe('computeHealthScore', () => {
+  it('returns null when there are no records', () => {
+    expect(computeHealthScore(validateAdsTxt('OWNERDOMAIN=a.com').stats)).toBeNull()
+  })
+
+  it('gives a clean file 100 / A', () => {
+    expect(computeHealthScore(validateAdsTxt(OWNER + 'foo.com, 1, DIRECT').stats)).toEqual({ score: 100, grade: 'A' })
+  })
+
+  it('penalizes errors, warnings and duplicates with caps', () => {
+    expect(computeHealthScore({ totalRecords: 5, errors: 1, warnings: 1, duplicatesRemoved: 1 })).toEqual({ score: 85, grade: 'B' })
+    expect(computeHealthScore({ totalRecords: 50, errors: 20, warnings: 20, duplicatesRemoved: 20 })).toEqual({ score: 0, grade: 'F' })
   })
 })

@@ -692,3 +692,16 @@ export function compareSnapshots(oldContent, newContent) {
 export function formatRecordLine(r) {
   return `${r.domain}, ${r.publisherId}, ${r.relationship}${r.certId ? ', ' + r.certId : ''}`
 }
+
+// Single 0–100 quality score for the file, so users can track improvement at a glance.
+// Errors weigh most (records buyers will reject), then warnings, then duplicates.
+export function computeHealthScore(stats) {
+  if (!stats || stats.totalRecords === 0) return null
+  const penalty =
+    Math.min(stats.errors * 10, 60) +
+    Math.min(stats.warnings * 3, 25) +
+    Math.min(stats.duplicatesRemoved * 2, 15)
+  const score = Math.max(0, 100 - penalty)
+  const grade = score >= 90 ? 'A' : score >= 75 ? 'B' : score >= 60 ? 'C' : score >= 40 ? 'D' : 'F'
+  return { score, grade }
+}

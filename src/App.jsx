@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect, useMemo, forwardRef, useImperativeHandle } from 'react'
-import { validateAdsTxt, TOP_NETWORKS, DOMAIN_TO_CERT, compareSnapshots, formatRecordLine } from './validator'
+import { validateAdsTxt, TOP_NETWORKS, DOMAIN_TO_CERT, compareSnapshots, formatRecordLine, computeHealthScore } from './validator'
 import { normalizeAdsTxtUrl } from './url'
 import { sortCleanedOutput } from './output'
 import { decodeShare, buildShareUrl, copyText } from './share'
@@ -380,6 +380,8 @@ export default function App() {
   const dataLineCount = input.split('\n').filter(l => l.trim() && !l.trim().startsWith('#')).length
   const isLargeFile = dataLineCount > LARGE_FILE_THRESHOLD
 
+  const health = useMemo(() => computeHealthScore(result?.stats), [result])
+
   // UX-07 FIX: dynamic output panel title
   const outputTitle = result && result.stats.errors > 0
     ? `Output (${result.stats.errors} error${result.stats.errors !== 1 ? 's' : ''})`
@@ -637,6 +639,15 @@ export default function App() {
 
             {result && (
               <div className="panel-footer stats-row">
+                {health && (
+                  <span
+                    className={`health-badge health-${health.grade.toLowerCase()}`}
+                    title="File quality score: −10 per error, −3 per warning, −2 per duplicate"
+                  >
+                    <span className="health-grade">{health.grade}</span>
+                    <span className="health-score">{health.score}</span>
+                  </span>
+                )}
                 <span className="stat"><strong>{result.stats.keptRecords}</strong> records</span>
                 {result.stats.directCount > 0 &&
                   <span className="stat stat-muted"><strong>{result.stats.directCount}</strong> DIRECT</span>}
