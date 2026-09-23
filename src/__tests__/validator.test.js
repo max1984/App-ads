@@ -169,3 +169,24 @@ describe('validateAdsTxt — record domain cleanup', () => {
     expect(r.cleanedContent.split('\n')[1]).toBe('foo.com, 1, DIRECT')
   })
 })
+
+describe('validateAdsTxt — publisher ID whitespace & duplicate variables', () => {
+  it('warns when publisher ID contains whitespace', () => {
+    const r = validateAdsTxt(OWNER + 'foo.com, pub 123, DIRECT')
+    const w = r.issues.find(i => /contains whitespace/.test(i.message))
+    expect(w.severity).toBe('warning')
+    expect(w.suggestion).toMatch(/'pub123'/)
+  })
+
+  it('removes exact duplicate variable lines without a multiple-OWNERDOMAIN warning', () => {
+    const r = validateAdsTxt('OWNERDOMAIN=a.com\nownerdomain=A.com\nfoo.com, 1, DIRECT')
+    expect(r.stats.duplicatesRemoved).toBe(1)
+    expect(r.issues.some(i => /Multiple OWNERDOMAIN/.test(i.message))).toBe(false)
+    expect(r.cleanedContent.split('\n')).toEqual(['OWNERDOMAIN=a.com', 'foo.com, 1, DIRECT'])
+  })
+
+  it('keeps repeated variables with different values', () => {
+    const r = validateAdsTxt('OWNERDOMAIN=a.com\nCONTACT=a@a.com\nCONTACT=b@b.com\nfoo.com, 1, DIRECT')
+    expect(r.stats.duplicatesRemoved).toBe(0)
+  })
+})

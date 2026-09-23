@@ -334,6 +334,7 @@ export function validateAdsTxt(content) {
   const inputLineIssues = new Map()
   const seenRecords = new Set()
   const seenDomains = new Set()
+  const seenVariableLines = new Set()
   const records = []
   const changes = []   // before → after for every transformed line
   const variables = {}
@@ -394,7 +395,7 @@ export function validateAdsTxt(content) {
         return
       }
 
-      if (varName === 'OWNERDOMAIN' && variables[varName]) {
+      if (varName === 'OWNERDOMAIN' && variables[varName] && variables[varName] !== toBareDomain(value)) {
         pushIssue({
           severity: 'warning', lineNumber,
           message: `Multiple OWNERDOMAIN declarations — only one is allowed per spec.`,
@@ -418,8 +419,21 @@ export function validateAdsTxt(content) {
         }
       }
 
-      variables[varName] = outValue
       const corrected = `${varName}=${outValue}`
+      // Exact repeats (same variable + value) carry no information — drop them like duplicate records.
+      if (seenVariableLines.has(corrected)) {
+        pushIssue({
+          severity: 'duplicate', lineNumber,
+          message: `Duplicate removed: ${corrected}.`,
+          original: stripped,
+          suggestion: null
+        })
+        changes.push({ lineNumber, original: stripped, cleaned: null, type: 'duplicate' })
+        duplicatesRemoved++
+        return
+      }
+      seenVariableLines.add(corrected)
+      variables[varName] = outValue
       correctedLines.push(corrected + inlineComment)
       outputLineStatuses.push(corrected !== body ? 'corrected' : null)
       return
@@ -508,6 +522,13 @@ export function validateAdsTxt(content) {
         message: `Empty publisher account ID (field 2).`,
         original: stripped,
         suggestion: `Add the publisher account ID provided by the ad network.`
+      })
+    } else if (/\s/.test(publisherIdRaw)) {
+      lineIssues.push({
+        severity: 'warning', lineNumber,
+        message: `Publisher account ID '${publisherIdRaw}' contains whitespace.`,
+        original: stripped,
+        suggestion: `Seller IDs never contain spaces — did you mean '${publisherIdRaw.replace(/\s+/g, '')}'?`
       })
     }
 
