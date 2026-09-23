@@ -320,7 +320,8 @@ function worstOf(a, b) {
 }
 
 export function validateAdsTxt(content) {
-  const lines = content.split('\n')
+  // Normalize CRLF / lone CR so Windows-edited files don't produce mixed line endings in the output.
+  const lines = content.split(/\r\n?|\n/)
   const correctedLines = []
   const outputLineStatuses = []
   const issues = []

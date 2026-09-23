@@ -150,3 +150,12 @@ describe('validateAdsTxt — inline comments & extra fields', () => {
     expect(r.cleanedContent.split('\n')[1]).toBe('foo.com, 1, DIRECT, 0123456789abcdef')
   })
 })
+
+describe('validateAdsTxt — line endings', () => {
+  it('normalizes CRLF and CR line endings to LF', () => {
+    const r = validateAdsTxt('# hdr\r\nOWNERDOMAIN=a.com\r\nfoo.com, 1\rbar.com, 2, DIRECT\r\n')
+    expect(r.cleanedContent).not.toMatch(/\r/)
+    expect(r.cleanedContent.split('\n')).toHaveLength(5)
+    expect(r.inputLineIssues.get(3)).toBe('error')
+  })
+})
