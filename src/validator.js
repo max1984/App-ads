@@ -413,8 +413,23 @@ export function validateAdsTxt(content) {
       // same as we do for record domains, and only raise an issue if it's still malformed.
       let outValue = value
       if (DOMAIN_VARIABLES.has(varName) && value) {
-        outValue = toBareDomain(value)
-        if (!outValue || !DOMAIN_REGEX.test(outValue)) {
+        // MANAGERDOMAIN may carry an optional ISO 3166-1 alpha-2 country: 'manager.com,US'.
+        const [domainPart, countryPart] = varName === 'MANAGERDOMAIN' ? value.split(/,(.*)/s) : [value]
+        outValue = toBareDomain(domainPart)
+        if (countryPart !== undefined) {
+          const country = countryPart.trim().toUpperCase()
+          if (!/^[A-Z]{2}$/.test(country)) {
+            pushIssue({
+              severity: 'error', lineNumber,
+              message: `MANAGERDOMAIN country '${countryPart.trim()}' is not a 2-letter ISO country code.`,
+              original: stripped,
+              suggestion: `Use the form MANAGERDOMAIN=manager.com,US — or drop the country for a global manager.`
+            })
+          }
+          outValue = `${outValue},${country}`
+        }
+        const domainOnly = outValue.split(',')[0]
+        if (!domainOnly || !DOMAIN_REGEX.test(domainOnly)) {
           pushIssue({
             severity: 'error', lineNumber,
             message: `${varName} value '${value}' doesn't look like a valid domain.`,

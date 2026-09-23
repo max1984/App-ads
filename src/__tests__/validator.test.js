@@ -231,3 +231,22 @@ describe('validateAdsTxt — cert ID mismatch (same company)', () => {
     expect(r.stats.warnings).toBe(0)
   })
 })
+
+describe('validateAdsTxt — MANAGERDOMAIN country code', () => {
+  it('accepts and normalizes domain,country', () => {
+    const r = validateAdsTxt('OWNERDOMAIN=a.com\nMANAGERDOMAIN=Manager.com, us\nfoo.com, 1, DIRECT')
+    expect(r.stats.errors).toBe(0)
+    expect(r.cleanedContent.split('\n')[1]).toBe('MANAGERDOMAIN=manager.com,US')
+    expect(r.variables.MANAGERDOMAIN).toBe('manager.com,US')
+  })
+
+  it('errors on an invalid country code', () => {
+    const r = validateAdsTxt('OWNERDOMAIN=a.com\nMANAGERDOMAIN=manager.com,USA\nfoo.com, 1, DIRECT')
+    expect(r.issues.some(i => /not a 2-letter ISO country code/.test(i.message))).toBe(true)
+  })
+
+  it('still accepts a bare MANAGERDOMAIN', () => {
+    const r = validateAdsTxt('OWNERDOMAIN=a.com\nMANAGERDOMAIN=manager.com\nfoo.com, 1, DIRECT')
+    expect(r.stats.errors).toBe(0)
+  })
+})
