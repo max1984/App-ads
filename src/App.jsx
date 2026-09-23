@@ -585,6 +585,7 @@ export default function App() {
               onDragLeave={() => setIsDragging(false)}
               lineIssues={result?.inputLineIssues}
               placeholder={PLACEHOLDER}
+              ariaLabel="app-ads.txt input"
               onCtrlEnter={() => runValidation(input)}
             />
 
@@ -624,7 +625,7 @@ export default function App() {
             </div>
 
             {result ? (
-              <GutterEditor value={displayContent} readOnly lineStatuses={displayStatuses} placeholder="" />
+              <GutterEditor value={displayContent} readOnly lineStatuses={displayStatuses} placeholder="" ariaLabel="Cleaned output" />
             ) : (
               <div className="output-empty">
                 <div className="output-empty-arrow">→</div>
@@ -805,7 +806,7 @@ const STATUS_COLOR = {
 
 const GutterEditor = forwardRef(function GutterEditor({
   value, onChange, onDrop, onDragOver, onDragLeave, isDragging,
-  lineIssues, lineStatuses, placeholder, readOnly, onCtrlEnter
+  lineIssues, lineStatuses, placeholder, readOnly, onCtrlEnter, ariaLabel
 }, ref) {
   const textareaRef = useRef()
   const gutterRef   = useRef()
@@ -851,6 +852,7 @@ const GutterEditor = forwardRef(function GutterEditor({
         onDragOver={onDragOver ? (e) => { e.preventDefault(); onDragOver() } : undefined}
         onDragLeave={onDragLeave}
         placeholder={placeholder}
+        aria-label={ariaLabel}
         readOnly={readOnly}
         spellCheck={false}
         wrap="off"
