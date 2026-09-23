@@ -258,6 +258,12 @@
   border-color: var(--success-border) !important;
 }
 
+.btn-danger {
+  background: var(--error-bg) !important;
+  color: var(--error-color) !important;
+  border-color: var(--error-border) !important;
+}
+
 /* ── Stats ───────────────────────────────────────────────────── */
 .stats-row { gap: 12px; }
 

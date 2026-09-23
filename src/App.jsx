@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect, useMemo, forwardRef, useImper
 import { validateAdsTxt, TOP_NETWORKS, DOMAIN_TO_CERT, compareSnapshots, formatRecordLine } from './validator'
 import { normalizeAdsTxtUrl } from './url'
 import { sortCleanedOutput } from './output'
+import { decodeShare, buildShareUrl, copyText } from './share'
 import './App.css'
 
 const PLACEHOLDER = `# Paste your app-ads.txt content here
@@ -38,22 +39,6 @@ function formatVersionTime(ts) {
   return new Date(ts).toLocaleDateString()
 }
 
-// BUG-08 FIX: replace deprecated escape/unescape with TextEncoder/TextDecoder
-function encodeShare(str) {
-  try {
-    const bytes = new TextEncoder().encode(str)
-    const binStr = Array.from(bytes, b => String.fromCodePoint(b)).join('')
-    return btoa(binStr)
-  } catch { return null }
-}
-function decodeShare(b64) {
-  try {
-    const binStr = atob(b64)
-    const bytes = Uint8Array.from(binStr, c => c.codePointAt(0))
-    return new TextDecoder().decode(bytes)
-  } catch { return null }
-}
-
 async function fetchFromUrl(url) {
   try {
     const res = await fetch(url, { signal: AbortSignal.timeout(6000) })
@@ -84,7 +69,7 @@ export default function App() {
   const [result, setResult] = useState(null)
   const [isDragging, setIsDragging] = useState(false)
   const [copiedOutput, setCopiedOutput] = useState(false)
-  const [copiedShare, setCopiedShare] = useState(false)
+  const [shareStatus, setShareStatus] = useState(null)  // null | 'copied' | 'too-large' | 'failed'
   const [copiedNetwork, setCopiedNetwork] = useState(null)
   const [issueFilter, setIssueFilter] = useState('all')
   const [urlValue, setUrlValue] = useState('')
@@ -314,7 +299,7 @@ export default function App() {
 
   const handleCopyOutput = async () => {
     if (!result) return
-    await navigator.clipboard.writeText(displayContent)
+    if (!(await copyText(displayContent))) return
     setCopiedOutput(true)
     setTimeout(() => setCopiedOutput(false), 2000)
   }
@@ -339,17 +324,11 @@ export default function App() {
   }
 
   const handleShare = async () => {
-    if (!input.trim()) return
-    const encoded = encodeShare(input)
-    if (!encoded) return
-    if (encoded.length > 100000) {
-      alert('File too large to share via URL (> ~75 KB). Download and share the file directly.')
-      return
-    }
-    const url = `${window.location.origin}${window.location.pathname}#${encoded}`
-    await navigator.clipboard.writeText(url)
-    setCopiedShare(true)
-    setTimeout(() => setCopiedShare(false), 2000)
+    const { url, error } = buildShareUrl(input, `${window.location.origin}${window.location.pathname}`)
+    if (error === 'empty') return
+    const status = error === 'too-large' ? 'too-large' : error ? 'failed' : (await copyText(url)) ? 'copied' : 'failed'
+    setShareStatus(status)
+    setTimeout(() => setShareStatus(null), status === 'copied' ? 2000 : 4000)
   }
 
   const handleJumpToLine = useCallback((lineNumber) => {
@@ -383,7 +362,7 @@ export default function App() {
     const line = cert
       ? `${network.domain}, YOUR_PUBLISHER_ID, DIRECT, ${cert}`
       : `${network.domain}, YOUR_PUBLISHER_ID, DIRECT`
-    await navigator.clipboard.writeText(line)
+    if (!(await copyText(line))) return
     setCopiedNetwork(network.domain)
     setTimeout(() => setCopiedNetwork(null), 2000)
   }
@@ -424,12 +403,18 @@ export default function App() {
             ? IAB spec
           </a>
           <button
-            className={`btn btn-ghost${copiedShare ? ' btn-success' : ''}`}
+            className={`btn btn-ghost${shareStatus === 'copied' ? ' btn-success' : shareStatus ? ' btn-danger' : ''}`}
             onClick={handleShare}
             disabled={!input.trim()}
-            title="Copy shareable link to clipboard"
+            title={shareStatus === 'too-large'
+              ? 'File too large to share via URL (> ~75 KB) — download and share the file instead'
+              : 'Copy shareable link to clipboard'}
+            aria-live="polite"
           >
-            {copiedShare ? '✓ Copied!' : 'Share'}
+            {shareStatus === 'copied' ? '✓ Copied!'
+              : shareStatus === 'too-large' ? '⚠ Too large to share'
+              : shareStatus === 'failed' ? '⚠ Copy failed'
+              : 'Share'}
           </button>
           <button
             className="btn btn-ghost dark-toggle"
@@ -901,7 +886,7 @@ function BatchResultRow({ item, onLoad }) {
 
   const handleCopyUrl = async (e) => {
     e.stopPropagation()
-    await navigator.clipboard.writeText(item.url)
+    if (!(await copyText(item.url))) return
     setCopiedUrl(true)
     setTimeout(() => setCopiedUrl(false), 2000)
   }
