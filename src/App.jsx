@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect, useMemo, forwardRef, useImperativeHandle } from 'react'
 import { validateAdsTxt, TOP_NETWORKS, DOMAIN_TO_CERT, compareSnapshots, formatRecordLine } from './validator'
+import { normalizeAdsTxtUrl } from './url'
 import './App.css'
 
 const PLACEHOLDER = `# Paste your app-ads.txt content here
@@ -169,7 +170,7 @@ export default function App() {
   }
 
   const handleLoadUrl = async () => {
-    const url = urlValue.trim()
+    const url = normalizeAdsTxtUrl(urlValue)
     if (!url) return
     setUrlLoading(true)
     setUrlError('')
@@ -187,7 +188,7 @@ export default function App() {
 
   // BUG-05 + BUG-06 FIX: semaphore-limited concurrency + generation counter
   const handleBatchCheck = async () => {
-    const urls = batchInput.split('\n').map(u => u.trim()).filter(Boolean)
+    const urls = batchInput.split('\n').map(normalizeAdsTxtUrl).filter(Boolean)
     if (!urls.length) return
     const gen = ++batchGenRef.current
     setBatchLoading(true)
@@ -455,7 +456,7 @@ export default function App() {
           <input
             className="url-input"
             type="url"
-            placeholder="https://example.com/app-ads.txt  (Enter to load)"
+            placeholder="example.com or https://example.com/app-ads.txt  (Enter to load)"
             value={urlValue}
             onChange={e => { setUrlValue(e.target.value); setUrlError('') }}
             onKeyDown={e => e.key === 'Enter' && handleLoadUrl()}
@@ -504,7 +505,7 @@ export default function App() {
             </div>
             <textarea
               className="batch-textarea"
-              placeholder={'https://example.com/app-ads.txt\nhttps://another.com/app-ads.txt'}
+              placeholder={'example.com\nhttps://another.com/app-ads.txt'}
               value={batchInput}
               onChange={e => setBatchInput(e.target.value)}
               rows={4}
