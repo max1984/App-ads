@@ -159,3 +159,13 @@ describe('validateAdsTxt — line endings', () => {
     expect(r.inputLineIssues.get(3)).toBe('error')
   })
 })
+
+describe('validateAdsTxt — record domain cleanup', () => {
+  it('strips scheme and path from record domains and marks the line corrected', () => {
+    const r = validateAdsTxt(OWNER + 'https://Foo.com/, 1, DIRECT')
+    expect(r.records[0].domain).toBe('foo.com')
+    expect(r.stats.errors).toBe(0)
+    expect(r.outputLineStatuses[1]).toBe('corrected')
+    expect(r.cleanedContent.split('\n')[1]).toBe('foo.com, 1, DIRECT')
+  })
+})

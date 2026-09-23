@@ -319,6 +319,12 @@ function worstOf(a, b) {
   return SEVERITY_RANK[a] >= SEVERITY_RANK[b] ? a : b
 }
 
+// Strips scheme, path, query and case: 'https://Google.com/x' → 'google.com'.
+function toBareDomain(value) {
+  const schemeStripped = value.trim().replace(/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//, '')
+  return schemeStripped.split(/[\/?#\s]/)[0].toLowerCase()
+}
+
 export function validateAdsTxt(content) {
   // Normalize CRLF / lone CR so Windows-edited files don't produce mixed line endings in the output.
   const lines = content.split(/\r\n?|\n/)
@@ -401,9 +407,7 @@ export function validateAdsTxt(content) {
       // same as we do for record domains, and only raise an issue if it's still malformed.
       let outValue = value
       if (DOMAIN_VARIABLES.has(varName) && value) {
-        const schemeStripped = value.replace(/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//, '')
-        const bareValue = schemeStripped.split(/[\/?#\s]/)[0]
-        outValue = bareValue.toLowerCase()
+        outValue = toBareDomain(value)
         if (!outValue || !DOMAIN_REGEX.test(outValue)) {
           pushIssue({
             severity: 'error', lineNumber,
@@ -446,7 +450,7 @@ export function validateAdsTxt(content) {
       return
     }
 
-    const domain = parts[0].toLowerCase()
+    const domain = toBareDomain(parts[0])
     // BUG-02 FIX: Preserve original publisher ID case in output; lowercase only for comparison.
     const publisherIdRaw = parts[1]
     const publisherIdLower = publisherIdRaw.toLowerCase()
