@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect, useMemo, forwardRef, useImper
 import { validateAdsTxt, TOP_NETWORKS, DOMAIN_TO_CERT, compareSnapshots, formatRecordLine, computeHealthScore } from './validator'
 import { normalizeAdsTxtUrl, fetchFromUrl } from './url'
 import { sortCleanedOutput } from './output'
+import { batchResultsToCsv } from './batch'
 import { decodeShare, buildShareUrl, copyText } from './share'
 import './App.css'
 
@@ -37,6 +38,13 @@ function formatVersionTime(ts) {
   const days = Math.floor(hr / 24)
   if (days < 7) return `${days}d ago`
   return new Date(ts).toLocaleDateString()
+}
+
+function downloadFile(content, filename, type) {
+  const url = URL.createObjectURL(new Blob([content], { type }))
+  const a = document.createElement('a')
+  a.href = url; a.download = filename; a.click()
+  URL.revokeObjectURL(url)
 }
 
 // BUG-05 FIX: semaphore to cap batch concurrency at 5
@@ -242,11 +250,7 @@ export default function App() {
 
   const handleExportVersions = () => {
     if (!versions.length) return
-    const blob = new Blob([JSON.stringify(versions, null, 2)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url; a.download = 'app-ads-versions.json'; a.click()
-    URL.revokeObjectURL(url)
+    downloadFile(JSON.stringify(versions, null, 2), 'app-ads-versions.json', 'application/json')
   }
 
   const handleImportVersions = (file) => {
@@ -293,21 +297,17 @@ export default function App() {
 
   const handleDownload = () => {
     if (!result) return
-    const blob = new Blob([displayContent], { type: 'text/plain' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url; a.download = 'app-ads.txt'; a.click()
-    URL.revokeObjectURL(url)
+    downloadFile(displayContent, 'app-ads.txt', 'text/plain')
+  }
+
+  const handleBatchCsvExport = () => {
+    downloadFile(batchResultsToCsv(batchResults), 'app-ads-batch.csv', 'text/csv')
   }
 
   const handleJsonExport = () => {
     if (!result) return
     // BUG-04 FIX: use sortedRecords so JSON matches the sorted .txt download
-    const blob = new Blob([JSON.stringify(sortedRecords, null, 2)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url; a.download = 'app-ads.json'; a.click()
-    URL.revokeObjectURL(url)
+    downloadFile(JSON.stringify(sortedRecords, null, 2), 'app-ads.json', 'application/json')
   }
 
   const handleShare = async () => {
@@ -476,12 +476,18 @@ export default function App() {
               placeholder={'example.com\nhttps://another.com/app-ads.txt'}
               value={batchInput}
               onChange={e => setBatchInput(e.target.value)}
+              aria-label="URLs to check, one per line"
               rows={4}
             />
             <div className="batch-actions">
               <button className="btn btn-primary" onClick={handleBatchCheck} disabled={!batchInput.trim() || batchLoading}>
                 {batchLoading ? 'Checking…' : 'Check all URLs'}
               </button>
+              {batchResults.length > 0 && (
+                <button className="btn btn-ghost" onClick={handleBatchCsvExport} disabled={batchLoading}>
+                  Export CSV
+                </button>
+              )}
               {batchResults.length > 0 && (
                 <button className="btn btn-ghost" onClick={() => { setBatchResults([]); batchGenRef.current++ }}>
                   Clear results
