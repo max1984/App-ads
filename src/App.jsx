@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect, useMemo, forwardRef, useImperativeHandle } from 'react'
 import { validateAdsTxt, TOP_NETWORKS, DOMAIN_TO_CERT, compareSnapshots, formatRecordLine } from './validator'
 import { normalizeAdsTxtUrl } from './url'
+import { sortCleanedOutput } from './output'
 import './App.css'
 
 const PLACEHOLDER = `# Paste your app-ads.txt content here
@@ -301,21 +302,12 @@ export default function App() {
       displayStatuses: result.outputLineStatuses,
       sortedRecords: result.records,
     }
-    const lines = result.cleanedContent.split('\n')
-    const statuses = result.outputLineStatuses
-    const headers = [], dataRows = []
-    lines.forEach((line, i) => {
-      const t = line.trim()
-      if (!t || t.startsWith('#')) headers.push({ line, status: statuses[i] ?? null })
-      else dataRows.push({ line, status: statuses[i] ?? null })
-    })
-    dataRows.sort((a, b) => a.line.localeCompare(b.line))
-    const all = [...headers, ...dataRows]
+    const sortedOutput = sortCleanedOutput(result.cleanedContent, result.outputLineStatuses)
     // BUG-04 FIX: also sort records for JSON export
     const sorted = [...result.records].sort((a, b) => a.domain.localeCompare(b.domain))
     return {
-      displayContent: all.map(r => r.line).join('\n'),
-      displayStatuses: all.map(r => r.status),
+      displayContent: sortedOutput.content,
+      displayStatuses: sortedOutput.statuses,
       sortedRecords: sorted,
     }
   }, [result, sortOutput])
