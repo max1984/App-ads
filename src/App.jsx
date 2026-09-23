@@ -2,7 +2,7 @@ import { useState, useRef, useCallback, useEffect, useMemo, forwardRef, useImper
 import { validateAdsTxt, TOP_NETWORKS, DOMAIN_TO_CERT, compareSnapshots, formatRecordLine, computeHealthScore } from './validator'
 import { normalizeAdsTxtUrl, fetchFromUrl } from './url'
 import { sortCleanedOutput } from './output'
-import { batchResultsToCsv } from './batch'
+import { batchResultsToCsv, summarizeBatch } from './batch'
 import { decodeShare, buildShareUrl, copyText } from './share'
 import './App.css'
 
@@ -368,6 +368,7 @@ export default function App() {
   const isLargeFile = dataLineCount > LARGE_FILE_THRESHOLD
 
   const health = useMemo(() => computeHealthScore(result?.stats), [result])
+  const batchSummary = useMemo(() => batchResults.length ? summarizeBatch(batchResults) : null, [batchResults])
 
   // UX-07 FIX: dynamic output panel title
   const outputTitle = result && result.stats.errors > 0
@@ -494,6 +495,16 @@ export default function App() {
                 </button>
               )}
             </div>
+            {batchSummary && (
+              <p className="batch-summary" aria-live="polite">
+                <span>{batchSummary.total} checked</span>
+                {batchSummary.clean > 0 && <span className="bs-clean">{batchSummary.clean} clean</span>}
+                {batchSummary.withErrors > 0 && <span className="bs-errors">{batchSummary.withErrors} with errors</span>}
+                {batchSummary.failed > 0 && <span className="bs-failed">{batchSummary.failed} failed to load</span>}
+                {batchSummary.pending > 0 && <span className="bs-pending">{batchSummary.pending} pending</span>}
+                {batchSummary.avgScore != null && <span>avg score {batchSummary.avgScore}</span>}
+              </p>
+            )}
             {batchResults.length > 0 && (
               <div className="batch-results">
                 {batchResults.map((r, i) => (

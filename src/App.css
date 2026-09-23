@@ -1022,3 +1022,18 @@
   transition: background 0.12s, color 0.12s;
 }
 .apply-fix-btn:hover { background: var(--primary); color: #fff; }
+
+/* ── Batch summary ───────────────────────────────────────────── */
+.batch-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin: 10px 0 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.batch-summary .bs-clean   { color: var(--success-text); font-weight: 600; }
+.batch-summary .bs-errors  { color: var(--error-color); font-weight: 600; }
+.batch-summary .bs-failed  { color: var(--warning-color); font-weight: 600; }
+.batch-summary .bs-pending { font-style: italic; }

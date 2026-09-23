@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { batchResultsToCsv } from '../batch.js'
+import { batchResultsToCsv, summarizeBatch } from '../batch.js'
 import { validateAdsTxt } from '../validator.js'
 
 describe('batchResultsToCsv', () => {
@@ -17,5 +17,17 @@ describe('batchResultsToCsv', () => {
   it('quotes commas/quotes and neutralizes formula-like cells', () => {
     const csv = batchResultsToCsv([{ url: '=HYPERLINK("x")', status: 'error', result: null, error: 'a, "b"' }])
     expect(csv.split('\r\n')[1]).toBe(`"'=HYPERLINK(""x"")",error,,,,,,,,,,"a, ""b"""`)
+  })
+})
+
+describe('summarizeBatch', () => {
+  it('counts clean, erroring, failed and pending results and averages scores', () => {
+    const s = summarizeBatch([
+      { status: 'done', result: validateAdsTxt('OWNERDOMAIN=a.com\nfoo.com, 1, DIRECT') },        // 100
+      { status: 'done', result: validateAdsTxt('OWNERDOMAIN=a.com\nfoo.com, 1, DIRECT\nbad') },   // 1 error → 90
+      { status: 'error', result: null, error: 'x' },
+      { status: 'loading', result: null },
+    ])
+    expect(s).toEqual({ total: 4, pending: 1, clean: 1, withErrors: 1, failed: 1, avgScore: 95 })
   })
 })

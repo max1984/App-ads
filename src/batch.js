@@ -25,3 +25,21 @@ export function batchResultsToCsv(results) {
   })
   return [COLUMNS, ...rows].map(r => r.map(csvCell).join(',')).join('\r\n') + '\r\n'
 }
+
+// One-line overview for the batch panel: how many files fetched cleanly, had errors, or failed.
+export function summarizeBatch(results) {
+  const summary = { total: results.length, pending: 0, clean: 0, withErrors: 0, failed: 0, avgScore: null }
+  const scores = []
+  for (const { status, result } of results) {
+    if (status === 'loading') summary.pending++
+    else if (status === 'error') summary.failed++
+    else {
+      if (result.stats.errors > 0) summary.withErrors++
+      else summary.clean++
+      const health = computeHealthScore(result.stats)
+      if (health) scores.push(health.score)
+    }
+  }
+  if (scores.length) summary.avgScore = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length)
+  return summary
+}
