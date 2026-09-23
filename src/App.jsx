@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect, useMemo, forwardRef, useImperativeHandle } from 'react'
 import { validateAdsTxt, TOP_NETWORKS, DOMAIN_TO_CERT, compareSnapshots, formatRecordLine, computeHealthScore } from './validator'
-import { normalizeAdsTxtUrl } from './url'
+import { normalizeAdsTxtUrl, fetchFromUrl } from './url'
 import { sortCleanedOutput } from './output'
 import { decodeShare, buildShareUrl, copyText } from './share'
 import './App.css'
@@ -37,19 +37,6 @@ function formatVersionTime(ts) {
   const days = Math.floor(hr / 24)
   if (days < 7) return `${days}d ago`
   return new Date(ts).toLocaleDateString()
-}
-
-async function fetchFromUrl(url) {
-  try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(6000) })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    return await res.text()
-  } catch {
-    const proxy = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`
-    const res = await fetch(proxy, { signal: AbortSignal.timeout(10000) })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    return await res.text()
-  }
 }
 
 // BUG-05 FIX: semaphore to cap batch concurrency at 5
