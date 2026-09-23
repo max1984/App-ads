@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect, useMemo, forwardRef, useImperativeHandle } from 'react'
+import { useState, useRef, useCallback, useEffect, useMemo, forwardRef, useImperativeHandle, memo } from 'react'
 import { validateAdsTxt, TOP_NETWORKS, DOMAIN_TO_CERT, compareSnapshots, formatRecordLine, computeHealthScore } from './validator'
 import { normalizeAdsTxtUrl, fetchFromUrl } from './url'
 import { sortCleanedOutput } from './output'
@@ -364,7 +364,10 @@ export default function App() {
     .filter(({ issue }) => issueFilter === 'all' || issue.severity === issueFilter)
     ?? []
 
-  const dataLineCount = input.split('\n').filter(l => l.trim() && !l.trim().startsWith('#')).length
+  const dataLineCount = useMemo(
+    () => input.split('\n').filter(l => l.trim() && !l.trim().startsWith('#')).length,
+    [input]
+  )
   const isLargeFile = dataLineCount > LARGE_FILE_THRESHOLD
 
   const health = useMemo(() => computeHealthScore(result?.stats), [result])
@@ -810,13 +813,36 @@ const STATUS_COLOR = {
   filled:    'gutter-filled',
 }
 
+function countLines(text) {
+  let n = 1
+  for (let i = text.indexOf('\n'); i !== -1; i = text.indexOf('\n', i + 1)) n++
+  return n
+}
+
+// Memoized so typing within a line doesn't re-render thousands of line numbers —
+// it only updates when the line count or validation statuses change.
+const Gutter = memo(forwardRef(function Gutter({ lineCount, lineIssues, lineStatuses }, ref) {
+  const getLineCls = (i) => {
+    if (lineIssues)   { const s = lineIssues.get(i + 1);  return s ? STATUS_COLOR[s] : '' }
+    if (lineStatuses) { const s = lineStatuses[i];         return s ? STATUS_COLOR[s] : '' }
+    return ''
+  }
+  return (
+    <div className="gutter" ref={ref} aria-hidden="true">
+      {Array.from({ length: lineCount }, (_, i) => (
+        <div key={i} className={`gutter-line ${getLineCls(i)}`}>{i + 1}</div>
+      ))}
+    </div>
+  )
+}))
+
 const GutterEditor = forwardRef(function GutterEditor({
   value, onChange, onDrop, onDragOver, onDragLeave, isDragging,
   lineIssues, lineStatuses, placeholder, readOnly, onCtrlEnter, ariaLabel
 }, ref) {
   const textareaRef = useRef()
   const gutterRef   = useRef()
-  const lines = value.split('\n')
+  const lineCount = useMemo(() => countLines(value), [value])
 
   const syncScroll = useCallback(() => {
     if (gutterRef.current && textareaRef.current)
@@ -835,19 +861,9 @@ const GutterEditor = forwardRef(function GutterEditor({
     }
   }), [])
 
-  const getLineCls = (i) => {
-    if (lineIssues)   { const s = lineIssues.get(i + 1);  return s ? STATUS_COLOR[s] : '' }
-    if (lineStatuses) { const s = lineStatuses[i];         return s ? STATUS_COLOR[s] : '' }
-    return ''
-  }
-
   return (
     <div className="gutter-wrap">
-      <div className="gutter" ref={gutterRef} aria-hidden="true">
-        {lines.map((_, i) => (
-          <div key={i} className={`gutter-line ${getLineCls(i)}`}>{i + 1}</div>
-        ))}
-      </div>
+      <Gutter ref={gutterRef} lineCount={lineCount} lineIssues={lineIssues} lineStatuses={lineStatuses} />
       <textarea
         ref={textareaRef}
         className={`editor${isDragging ? ' editor-drag' : ''}${readOnly ? ' editor-output' : ''}`}

@@ -62,3 +62,14 @@ describe('App — accessibility', () => {
     expect(batch.getAttribute('aria-expanded')).toBe('true')
   })
 })
+
+describe('App — gutter', () => {
+  it('renders one line number per input line and highlights error lines', () => {
+    const { container } = render(<App />)
+    typeInput('OWNERDOMAIN=a.com\nfoo.com, 1\nbar.com, 2, DIRECT')
+    fireEvent.click(screen.getByRole('button', { name: /Validate/ }))
+    const inputGutter = container.querySelector('.gutter')
+    expect([...inputGutter.children].map(d => d.textContent)).toEqual(['1', '2', '3'])
+    expect(inputGutter.children[1].className).not.toBe('gutter-line ')
+  })
+})
