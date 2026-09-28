@@ -35,6 +35,7 @@ Pushing to `main` runs tests, builds and deploys to GitHub Pages (`.github/workf
 | `src/url.js` | URL normalization and fetching (CORS proxy fallback, HTML soft-404 detection) |
 | `src/share.js` | Share-link encoding, clipboard helper |
 | `src/output.js` | Output sorting |
+| `src/versions.js` | Local version history persistence (localStorage) |
 | `src/batch.js` | Batch summary and CSV export |
 | `src/App.jsx` | UI |
 | `src/__tests__/` | Tests |
