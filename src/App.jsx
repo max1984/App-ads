@@ -4,6 +4,7 @@ import { normalizeAdsTxtUrl, fetchFromUrl } from './url'
 import { sortCleanedOutput } from './output'
 import { batchResultsToCsv, summarizeBatch } from './batch'
 import { decodeShare, buildShareUrl, copyText } from './share'
+import { loadVersions, persistVersions, mergeImportedVersions, MAX_VERSIONS } from './versions'
 import './App.css'
 
 const PLACEHOLDER = `# Paste your app-ads.txt content here
@@ -13,20 +14,6 @@ google.com, pub-0000000000000000, DIRECT, f08c47fec0942fa0
 appnexus.com, 1234, RESELLER, f5ab79cb980f11d1`
 
 const LARGE_FILE_THRESHOLD = 2000
-const VERSIONS_KEY = 'app-ads-versions'
-const MAX_VERSIONS = 30
-
-function loadVersions() {
-  try {
-    const raw = localStorage.getItem(VERSIONS_KEY)
-    const parsed = raw ? JSON.parse(raw) : []
-    return Array.isArray(parsed) ? parsed : []
-  } catch { return [] }
-}
-
-function persistVersions(list) {
-  try { localStorage.setItem(VERSIONS_KEY, JSON.stringify(list)) } catch { /* storage unavailable */ }
-}
 
 function formatVersionTime(ts) {
   const diffMs = Date.now() - ts
@@ -259,14 +246,10 @@ export default function App() {
     reader.onload = (e) => {
       try {
         const imported = JSON.parse(e.target.result)
-        if (!Array.isArray(imported)) return
-        const existingIds = new Set(versions.map(v => v.id))
-        const merged = [...versions, ...imported.filter(v => v?.id && v?.content && !existingIds.has(v.id))]
-          .sort((a, b) => b.timestamp - a.timestamp)
-          .slice(0, MAX_VERSIONS)
+        const { versions: merged } = mergeImportedVersions(versions, imported, MAX_VERSIONS)
         setVersions(merged)
         persistVersions(merged)
-      } catch { /* ignore malformed import */ }
+      } catch { /* not a version history file, or malformed JSON — ignore */ }
     }
     reader.readAsText(file, 'utf-8')
   }
