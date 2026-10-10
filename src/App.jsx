@@ -317,7 +317,17 @@ export default function App() {
   // FEAT: apply a parsed fix directly to the input
   const handleApplyFix = useCallback((issue, fixLine) => {
     const lines = input.split('\n')
-    if (issue.lineNumber > 0 && issue.lineNumber <= lines.length) {
+    // `issue` was computed by the 300ms-debounced validation in handleInputChange
+    // against whatever `input` looked like back then — if the user types again
+    // before that timer fires, the Issues panel (and the Apply fix button it
+    // renders) still reflects that stale text while `input` here is already
+    // current. Blindly overwriting lines[issue.lineNumber - 1] in that case
+    // clobbers whatever unrelated line now sits at that index. Only apply when
+    // the line is still exactly what the issue was raised against.
+    if (
+      issue.lineNumber > 0 && issue.lineNumber <= lines.length &&
+      lines[issue.lineNumber - 1].trim() === issue.original
+    ) {
       lines[issue.lineNumber - 1] = fixLine
       const newInput = lines.join('\n')
       setInput(newInput)

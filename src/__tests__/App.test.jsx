@@ -14,7 +14,7 @@ beforeEach(() => {
     clear: () => store.clear(),
   })
 })
-afterEach(() => { cleanup(); vi.unstubAllGlobals() })
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.useRealTimers() })
 
 const typeInput = (text) =>
   fireEvent.change(screen.getByLabelText('app-ads.txt input'), { target: { value: text } })
@@ -41,6 +41,22 @@ describe('App', () => {
     fireEvent.click(screen.getAllByRole('button', { name: /Apply fix/i })[0])
     expect(screen.getByLabelText('app-ads.txt input').value)
       .toBe('OWNERDOMAIN=example.com\ngoogle.com, pub-1, DIRECT, f08c47fec0942fa0')
+  })
+
+  it('ignores a stale Apply fix click if the input shifted before the debounced re-validation caught up', () => {
+    vi.useFakeTimers()
+    render(<App />)
+    typeInput('OWNERDOMAIN=example.com\ngoogle.com, pub-1, DIRECT, c3e20eee3f780d68')
+    act(() => { vi.advanceTimersByTime(300) })
+    const applyBtn = screen.getAllByRole('button', { name: /Apply fix/i })[0]
+
+    // Edit again, inserting a line before the issue — debounce is now pending,
+    // so the Apply fix button above still reflects the stale pre-edit text.
+    const shifted = 'OWNERDOMAIN=example.com\nNEW LINE\ngoogle.com, pub-1, DIRECT, c3e20eee3f780d68'
+    typeInput(shifted)
+    fireEvent.click(applyBtn)
+
+    expect(screen.getByLabelText('app-ads.txt input').value).toBe(shifted)
   })
 
   it('shows an inline message instead of alert() when the file is too large to share', async () => {
