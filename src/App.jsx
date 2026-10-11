@@ -90,6 +90,13 @@ export default function App() {
     if (!hash) return
     const decoded = decodeShare(hash)
     if (decoded) {
+      // Harmless today (this effect's empty deps array means it only ever
+      // runs once, on mount, before any keystroke could have armed
+      // handleInputChange's debounce timer) — kept anyway so this doesn't
+      // silently become the same stale-debounce race fixed elsewhere in
+      // this file if this decode logic is ever moved later in the
+      // component's lifecycle (e.g. behind a button instead of on mount).
+      clearTimeout(validateTimerRef.current)
       setInput(decoded)
       setResult(validateAdsTxt(decoded))
       history.replaceState(null, '', window.location.pathname)
@@ -120,6 +127,12 @@ export default function App() {
   }, [])
 
   const loadText = useCallback((text) => {
+    // Without this, a debounced re-validation from handleInputChange that's
+    // still pending (the user typed, then within 300ms loaded a file/URL/
+    // version/batch result instead of waiting) fires moments later and
+    // overwrites the just-loaded result with a validation of the OLD,
+    // already-replaced text.
+    clearTimeout(validateTimerRef.current)
     setInput(text)
     setResult(validateAdsTxt(text))
   }, [])
@@ -568,6 +581,11 @@ export default function App() {
               <div className="panel-actions">
                 <button className="btn btn-ghost" onClick={() => fileInputRef.current.click()}>Upload file</button>
                 <button className="btn btn-ghost" onClick={() => {
+                  // Without this, a debounced re-validation from
+                  // handleInputChange still pending at click time fires
+                  // ~300ms later and repopulates the output with a stale
+                  // validation of the just-cleared text.
+                  clearTimeout(validateTimerRef.current)
                   setInput(''); setResult(null); setLoadedUrl('')
                   setSortOutput(false)  // BUG-02 FIX: reset sort on clear
                 }}>

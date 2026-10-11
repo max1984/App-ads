@@ -59,6 +59,19 @@ describe('App', () => {
     expect(screen.getByLabelText('app-ads.txt input').value).toBe(shifted)
   })
 
+  it('does not let a pending debounced validation repopulate the output after Clear', () => {
+    vi.useFakeTimers()
+    render(<App />)
+    // handleInputChange's 300ms debounce is now pending (result is still
+    // null — nothing has re-validated yet).
+    typeInput('google.com, pub-1, DIRECT')
+    fireEvent.click(screen.getByRole('button', { name: 'Clear' }))
+    act(() => { vi.advanceTimersByTime(300) })
+
+    expect(screen.getByLabelText('app-ads.txt input').value).toBe('')
+    expect(screen.getByText('Cleaned output appears here')).toBeTruthy()
+  })
+
   it('shows an inline message instead of alert() when the file is too large to share', async () => {
     const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {})
     render(<App />)
