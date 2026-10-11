@@ -33,17 +33,30 @@ export async function copyText(text) {
     await navigator.clipboard.writeText(text)
     return true
   } catch {
+    // The whole fallback (creation through execCommand) stays inside one
+    // try/catch/finally: callers (App.jsx's copy/share buttons) await this
+    // with no try/catch of their own and expect `false`, never a rejection,
+    // on any failure — not just an execCommand failure, but also a setup
+    // step throwing (e.g. appendChild rejected by a restrictive sandbox).
+    // `finally` guarantees the invisible textarea is removed either way;
+    // without it, a throw skipped the removal and left it in the DOM
+    // permanently (execCommand itself is deprecated and increasingly
+    // disabled/restricted by browsers, so this is a real path, not just
+    // theoretical).
+    let ta
     try {
-      const ta = document.createElement('textarea')
+      ta = document.createElement('textarea')
       ta.value = text
       ta.setAttribute('readonly', '')
       ta.style.position = 'fixed'
       ta.style.opacity = '0'
       document.body.appendChild(ta)
       ta.select()
-      const ok = document.execCommand('copy')
-      ta.remove()
-      return ok
-    } catch { return false }
+      return document.execCommand('copy')
+    } catch {
+      return false
+    } finally {
+      ta?.remove()
+    }
   }
 }
