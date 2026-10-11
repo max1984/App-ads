@@ -987,8 +987,12 @@ function IssueCard({ issue, expanded, onToggle, onJumpToLine, onApplyFix }) {
     filled:    { label: 'Cert added', cls: 'filled' },
   }[issue.severity] ?? { label: issue.severity, cls: 'info' }
 
-  // FEAT: parse suggestion for auto-applicable fixes
-  const fixLine = issue.suggestion?.match(/(?:Change to|Remove invalid characters): (.+)$/)?.[1]
+  // FEAT: parse suggestion for auto-applicable fixes. Only "Change to:" is
+  // ever emitted by validator.js as an auto-fixable suggestion (confirmed by
+  // grepping every `suggestion:` literal there) — a "Remove invalid
+  // characters:" alternative used to be matched here too but no suggestion
+  // text has ever used that wording, so it was dead.
+  const fixLine = issue.suggestion?.match(/Change to: (.+)$/)?.[1]
 
   return (
     <div className={`issue issue-${meta.cls}`}>
