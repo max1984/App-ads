@@ -622,6 +622,9 @@ export function validateAdsTxt(content) {
 
     keptRecords++
     // BUG-02 FIX: Use publisherIdRaw (original case) in output, not lowercased version.
+    // Field order here — domain, publisherId, relationship, certId — also
+    // appears in output.js's sortRecordsForExport, which must stay in sync
+    // with it (or with whatever order this ever changes to).
     const recordParts = [domain, publisherIdRaw, relationship]
     if (certId) recordParts.push(certId)
     const cleanedLine = recordParts.join(', ') + extensionData + inlineComment

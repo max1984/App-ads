@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect, useMemo, forwardRef, useImperativeHandle, memo } from 'react'
 import { validateAdsTxt, TOP_NETWORKS, DOMAIN_TO_CERT, compareSnapshots, formatRecordLine, computeHealthScore } from './validator'
 import { normalizeAdsTxtUrl, fetchFromUrl } from './url'
-import { sortCleanedOutput } from './output'
+import { sortCleanedOutput, sortRecordsForExport } from './output'
 import { batchResultsToCsv, summarizeBatch } from './batch'
 import { decodeShare, buildShareUrl, copyText } from './share'
 import { loadVersions, persistVersions, mergeImportedVersions, MAX_VERSIONS } from './versions'
@@ -275,12 +275,11 @@ export default function App() {
       sortedRecords: result.records,
     }
     const sortedOutput = sortCleanedOutput(result.cleanedContent, result.outputLineStatuses)
-    // BUG-04 FIX: also sort records for JSON export
-    const sorted = [...result.records].sort((a, b) => a.domain.localeCompare(b.domain))
+    // BUG-04 FIX: also sort records for JSON export, matching sortCleanedOutput's order
     return {
       displayContent: sortedOutput.content,
       displayStatuses: sortedOutput.statuses,
-      sortedRecords: sorted,
+      sortedRecords: sortRecordsForExport(result.records),
     }
   }, [result, sortOutput])
 
