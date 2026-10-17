@@ -469,7 +469,7 @@ export default function App() {
           <p className="loaded-url">
             <span className="loaded-url-label">Loaded from:</span>
             <span className="loaded-url-value">{loadedUrl}</span>
-            <button className="loaded-url-clear" onClick={() => setLoadedUrl('')}>×</button>
+            <button className="loaded-url-clear" onClick={() => setLoadedUrl('')} aria-label="Clear loaded URL">×</button>
           </p>
         )}
 
