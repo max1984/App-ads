@@ -100,6 +100,19 @@ describe('App — accessibility', () => {
     // only the missing ones are interactive (click to copy a template line).
     expect(screen.getByRole('button', { name: /AppNexus/ })).toBeTruthy()
   })
+
+  it('exposes an issue\'s "jump to line" link as a keyboard-operable role=button', () => {
+    render(<App />)
+    typeInput('OWNERDOMAIN=a.com\nfoo.com, 1')
+    fireEvent.click(screen.getByRole('button', { name: /Validate/ }))
+    const jumpLink = screen.getByTitle('Jump to this line in the editor')
+    expect(jumpLink.getAttribute('role')).toBe('button')
+    expect(jumpLink.getAttribute('tabindex')).toBe('0')
+    // Must not throw — it's nested inside issue-top's own <button>, so it
+    // can't be a real <button> itself (invalid HTML) and relies on manual
+    // Enter/Space handling instead of the browser's native button behavior.
+    fireEvent.keyDown(jumpLink, { key: 'Enter' })
+  })
 })
 
 describe('App — gutter', () => {

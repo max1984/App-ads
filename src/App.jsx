@@ -932,9 +932,9 @@ function DiffRow({ change, onJumpToLine }) {
   const meta = DIFF_META[change.type] ?? { label: change.type, cls: 'info' }
   return (
     <div className={`diff-row diff-row-${meta.cls}`}>
-      <span className="diff-lineno" title="Jump to this line" onClick={() => onJumpToLine?.(change.lineNumber)}>
+      <button type="button" className="diff-lineno" title="Jump to this line" onClick={() => onJumpToLine?.(change.lineNumber)}>
         {change.lineNumber}
-      </span>
+      </button>
       <code className="diff-original">{change.original}</code>
       {change.cleaned !== null
         ? <code className="diff-cleaned">{change.cleaned}</code>
@@ -1022,10 +1022,22 @@ function IssueCard({ issue, expanded, onToggle, onJumpToLine, onApplyFix }) {
         <div className="issue-left">
           <span className={`badge badge-${meta.cls}`}>{meta.label}</span>
           {issue.lineNumber > 0 && (
+            // Nested inside the issue-top <button> above, so this can't be a
+            // real <button> itself (invalid HTML, button-in-button) — same
+            // role="button" + tabIndex + key-handling substitute as
+            // PieceRow's piece-selection row in rozkroj.
             <span
               className="issue-line issue-line-link"
+              role="button"
+              tabIndex={0}
               title="Jump to this line in the editor"
               onClick={e => { e.stopPropagation(); onJumpToLine?.(issue.lineNumber) }}
+              onKeyDown={e => {
+                if (e.key !== 'Enter' && e.key !== ' ') return
+                e.preventDefault()
+                e.stopPropagation()
+                onJumpToLine?.(issue.lineNumber)
+              }}
             >
               Line {issue.lineNumber}
             </span>
