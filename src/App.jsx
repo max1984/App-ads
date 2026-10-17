@@ -175,21 +175,29 @@ export default function App() {
     setBatchLoading(true)
     setBatchResults(urls.map(url => ({ url, status: 'loading', result: null, content: null, error: null })))
     const sem = createSemaphore(5)
-    await Promise.all(
-      urls.map((url, i) => sem(async () => {
-        if (batchGenRef.current !== gen) return
-        try {
-          const content = await fetchFromUrl(url)
-          const r = validateAdsTxt(content)
+    // try/finally so an unexpected rejection (every path inside the per-URL
+    // task already catches its own errors, but sem()/Promise.all itself
+    // re-throwing on anything else it didn't anticipate is exactly the kind
+    // of thing a later change here could introduce) can't leave batchLoading
+    // stuck true forever — same fix as handleLoadUrl just above.
+    try {
+      await Promise.all(
+        urls.map((url, i) => sem(async () => {
           if (batchGenRef.current !== gen) return
-          setBatchResults(prev => { const n = [...prev]; n[i] = { url, status: 'done', result: r, content, error: null }; return n })
-        } catch (e) {
-          if (batchGenRef.current !== gen) return
-          setBatchResults(prev => { const n = [...prev]; n[i] = { url, status: 'error', result: null, content: null, error: e.message }; return n })
-        }
-      }))
-    )
-    if (batchGenRef.current === gen) setBatchLoading(false)
+          try {
+            const content = await fetchFromUrl(url)
+            const r = validateAdsTxt(content)
+            if (batchGenRef.current !== gen) return
+            setBatchResults(prev => { const n = [...prev]; n[i] = { url, status: 'done', result: r, content, error: null }; return n })
+          } catch (e) {
+            if (batchGenRef.current !== gen) return
+            setBatchResults(prev => { const n = [...prev]; n[i] = { url, status: 'error', result: null, content: null, error: e.message }; return n })
+          }
+        }))
+      )
+    } finally {
+      if (batchGenRef.current === gen) setBatchLoading(false)
+    }
   }
 
   // VERSIONING: keep the open comparison live as the input changes
