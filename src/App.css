@@ -817,8 +817,12 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  width: 100%;
   padding: 8px 14px;
   background: var(--surface);
+  border: none;
+  font: inherit;
+  text-align: left;
   font-size: 12px;
 }
 

@@ -794,20 +794,33 @@ export default function App() {
                   {TOP_NETWORKS.map(n => {
                     const present = result.coverage.present.some(p => p.domain === n.domain)
                     const wasCopied = copiedNetwork === n.domain
-                    return (
-                      <div
-                        key={n.domain}
-                        className={`coverage-item${present ? ' present' : ' missing'}`}
-                        onClick={!present ? () => handleCopyNetworkTemplate(n) : undefined}
-                        title={!present ? `Click to copy template line for ${n.name}` : undefined}
-                      >
-                        {/* UX-01 FIX: ✗ for missing, ✓ for present */}
+                    // UX-01 FIX: ✗ for missing, ✓ for present
+                    const content = (
+                      <>
                         <span className="coverage-icon">
                           {wasCopied ? '✓' : present ? '✓' : '✗'}
                         </span>
                         <span className="coverage-name">{n.name}</span>
                         <span className="coverage-domain">{wasCopied ? 'copied!' : n.domain}</span>
-                      </div>
+                      </>
+                    )
+                    // Only the "missing" items are actually interactive (click to copy a
+                    // template line) — a <div onClick> there was unreachable by keyboard
+                    // and inoperable via Enter/Space, the same class of gap already fixed
+                    // elsewhere in this file (see "BUG-09 FIX" below) for issue-top.
+                    if (present) {
+                      return <div key={n.domain} className="coverage-item present">{content}</div>
+                    }
+                    return (
+                      <button
+                        key={n.domain}
+                        type="button"
+                        className="coverage-item missing"
+                        onClick={() => handleCopyNetworkTemplate(n)}
+                        title={`Click to copy template line for ${n.name}`}
+                      >
+                        {content}
+                      </button>
                     )
                   })}
                 </div>

@@ -90,6 +90,16 @@ describe('App — accessibility', () => {
     fireEvent.click(batch)
     expect(batch.getAttribute('aria-expanded')).toBe('true')
   })
+
+  it('renders a missing network coverage item as a real button, not a bare clickable div', () => {
+    render(<App />)
+    typeInput('google.com, pub-1, DIRECT')
+    fireEvent.click(screen.getByRole('button', { name: /Validate/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Network Coverage/ }))
+    // google.com is present (first in TOP_NETWORKS); appnexus.com is not —
+    // only the missing ones are interactive (click to copy a template line).
+    expect(screen.getByRole('button', { name: /AppNexus/ })).toBeTruthy()
+  })
 })
 
 describe('App — gutter', () => {
