@@ -5,7 +5,7 @@ const v = (id, timestamp, extra = {}) => ({ id, label: `V ${id}`, timestamp, con
 
 function memoryStorage(initial = {}) {
   const store = new Map(Object.entries(initial))
-  return { getItem: k => store.get(k) ?? null, setItem: (k, val) => store.set(k, val) }
+  return { getItem: k => store.get(k) ?? null, setItem: (k, val) => store.set(k, val), _store: () => store }
 }
 
 describe('isValidVersion', () => {
@@ -47,5 +47,13 @@ describe('version storage', () => {
   it('reports failure when storage throws (quota exceeded)', () => {
     expect(persistVersions([v('a', 1)], { setItem: () => { throw new Error('QuotaExceededError') } })).toBe(false)
     expect(persistVersions([v('a', 1)], memoryStorage())).toBe(true)
+  })
+
+  it('backs up corrupt JSON instead of letting the next save silently overwrite it', () => {
+    const s = memoryStorage({ [VERSIONS_KEY]: '{not valid json' })
+    expect(loadVersions(s)).toEqual([])
+    const backupKey = [...s._store().keys()].find(k => k !== VERSIONS_KEY)
+    expect(backupKey).toMatch(new RegExp(`^${VERSIONS_KEY}-corrupt-`))
+    expect(s.getItem(backupKey)).toBe('{not valid json')
   })
 })

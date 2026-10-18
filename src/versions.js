@@ -35,10 +35,19 @@ export function mergeImportedVersions(existing, imported, max = MAX_VERSIONS) {
 }
 
 export function loadVersions(storage = globalThis.localStorage) {
+  const raw = storage.getItem(VERSIONS_KEY)
+  if (!raw) return []
   try {
-    const parsed = JSON.parse(storage.getItem(VERSIONS_KEY) || '[]')
+    const parsed = JSON.parse(raw)
     return Array.isArray(parsed) ? parsed.filter(isValidVersion).map(cleanVersion) : []
-  } catch { return [] }
+  } catch {
+    // Corrupt JSON (not just an empty/missing key). The next persistVersions()
+    // call (e.g. saving a new version) overwrites VERSIONS_KEY unconditionally
+    // with whatever's in memory, which would silently and permanently destroy
+    // this value — back it up under a different key first instead of losing it.
+    try { storage.setItem(`${VERSIONS_KEY}-corrupt-${Date.now()}`, raw) } catch { /* best effort */ }
+    return []
+  }
 }
 
 // Returns false when the browser refused to store (quota exceeded, private mode…).
