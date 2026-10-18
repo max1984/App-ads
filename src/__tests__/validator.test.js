@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { validateAdsTxt, compareSnapshots, formatRecordLine, computeHealthScore } from '../validator.js'
+import { validateAdsTxt, compareSnapshots, formatRecordLine, computeHealthScore, DOMAIN_TO_CERT } from '../validator.js'
 
 const OWNER = 'OWNERDOMAIN=example.com\n'
 
@@ -249,4 +249,28 @@ describe('validateAdsTxt — MANAGERDOMAIN country code', () => {
     const r = validateAdsTxt('OWNERDOMAIN=a.com\nMANAGERDOMAIN=manager.com\nfoo.com, 1, DIRECT')
     expect(r.stats.errors).toBe(0)
   })
+})
+
+describe('validateAdsTxt — DOMAIN_TO_CERT / VALID_CA_IDS drift tolerance', () => {
+  it(
+    'does not crash the whole validation when DOMAIN_TO_CERT maps a domain to a cert ID ' +
+      "that isn't itself a VALID_CA_IDS key — the company-name comparison used to call " +
+      'companyOf(undefined) in that case and throw, instead of just degrading one message',
+    () => {
+      // These two hand-maintained tables are in sync today (nothing enforces that at
+      // runtime), so this simulates the drift a future edit to either could introduce:
+      // a domain whose "known" cert isn't itself a real, looked-up-able cert ID.
+      DOMAIN_TO_CERT['drift-test.example'] = 'not-a-real-cert-id'
+      try {
+        // google.com's real cert (f08c47fec0942fa0) is a VALID_CA_IDS key, differs from
+        // the fake knownCert above, and belongs to a different company — exactly what
+        // triggers the company-name comparison branch in validator.js.
+        expect(() =>
+          validateAdsTxt('OWNERDOMAIN=a.com\ndrift-test.example, pub-1, DIRECT, f08c47fec0942fa0')
+        ).not.toThrow()
+      } finally {
+        delete DOMAIN_TO_CERT['drift-test.example']
+      }
+    }
+  )
 })

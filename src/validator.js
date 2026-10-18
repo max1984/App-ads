@@ -320,8 +320,14 @@ function worstOf(a, b) {
 }
 
 // 'Google AdSense / AdMob' and 'Google (Authorized Buyers)' are the same company.
+// DOMAIN_TO_CERT and VALID_CA_IDS are two hand-maintained tables that must agree: every
+// cert ID DOMAIN_TO_CERT maps a domain to must also be a key in VALID_CA_IDS, or the one
+// call site below (comparing company names) would call this with undefined and throw,
+// taking down validation for every file instead of just showing a degraded message for
+// that one line. Tolerating undefined/missing names turns a future table edit that breaks
+// this invariant into a harmless wrong-looking warning instead of a hard crash.
 function companyOf(name) {
-  return name.split(/[\s(/]/)[0].toLowerCase()
+  return (name ?? '').split(/[\s(/]/)[0].toLowerCase()
 }
 
 // Strips scheme, path, query and case: 'https://Google.com/x' → 'google.com'.
