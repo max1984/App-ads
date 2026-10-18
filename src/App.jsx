@@ -1017,35 +1017,41 @@ function IssueCard({ issue, expanded, onToggle, onJumpToLine, onApplyFix }) {
 
   return (
     <div className={`issue issue-${meta.cls}`}>
-      {/* BUG-09 FIX: use <button> instead of <div> for keyboard accessibility */}
-      <button type="button" className="issue-top" onClick={onToggle} aria-expanded={expanded}>
+      {/* BUG-09 FIX: keyboard-accessible toggle. This can't be a real <button>
+          itself: it has to contain the "jump to line" button below, and the
+          HTML spec forbids interactive/tabindex descendants inside <button>
+          (a role="button" span nested in a real <button> is invalid and can
+          leave the inner control unreachable for keyboard/AT users) — same
+          role="button" + tabIndex + key-handling substitute as PieceRow's
+          piece-selection row in rozkroj, just on the outer element instead. */}
+      <div
+        className="issue-top"
+        role="button"
+        tabIndex={0}
+        onClick={onToggle}
+        onKeyDown={e => {
+          if (e.key !== 'Enter' && e.key !== ' ') return
+          e.preventDefault()
+          onToggle()
+        }}
+        aria-expanded={expanded}
+      >
         <div className="issue-left">
           <span className={`badge badge-${meta.cls}`}>{meta.label}</span>
           {issue.lineNumber > 0 && (
-            // Nested inside the issue-top <button> above, so this can't be a
-            // real <button> itself (invalid HTML, button-in-button) — same
-            // role="button" + tabIndex + key-handling substitute as
-            // PieceRow's piece-selection row in rozkroj.
-            <span
+            <button
+              type="button"
               className="issue-line issue-line-link"
-              role="button"
-              tabIndex={0}
               title="Jump to this line in the editor"
               onClick={e => { e.stopPropagation(); onJumpToLine?.(issue.lineNumber) }}
-              onKeyDown={e => {
-                if (e.key !== 'Enter' && e.key !== ' ') return
-                e.preventDefault()
-                e.stopPropagation()
-                onJumpToLine?.(issue.lineNumber)
-              }}
             >
               Line {issue.lineNumber}
-            </span>
+            </button>
           )}
           <span className="issue-message">{issue.message}</span>
         </div>
         <span className="issue-toggle">{expanded ? '▲' : '▼'}</span>
-      </button>
+      </div>
       {expanded && (issue.original || issue.suggestion) && (
         <div className="issue-body">
           {issue.original && (

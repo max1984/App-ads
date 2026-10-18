@@ -101,17 +101,20 @@ describe('App — accessibility', () => {
     expect(screen.getByRole('button', { name: /AppNexus/ })).toBeTruthy()
   })
 
-  it('exposes an issue\'s "jump to line" link as a keyboard-operable role=button', () => {
+  it('exposes an issue\'s "jump to line" link as a real nested button, and its parent toggle as a keyboard-operable role=button', () => {
     render(<App />)
     typeInput('OWNERDOMAIN=a.com\nfoo.com, 1')
     fireEvent.click(screen.getByRole('button', { name: /Validate/ }))
+    // The outer toggle can't be a real <button> because it has to contain
+    // this "jump to line" button, and <button> forbids interactive/tabindex
+    // descendants — so the toggle is a role="button" div instead.
     const jumpLink = screen.getByTitle('Jump to this line in the editor')
-    expect(jumpLink.getAttribute('role')).toBe('button')
-    expect(jumpLink.getAttribute('tabindex')).toBe('0')
-    // Must not throw — it's nested inside issue-top's own <button>, so it
-    // can't be a real <button> itself (invalid HTML) and relies on manual
-    // Enter/Space handling instead of the browser's native button behavior.
-    fireEvent.keyDown(jumpLink, { key: 'Enter' })
+    expect(jumpLink.tagName).toBe('BUTTON')
+    const issueTop = jumpLink.closest('[role="button"]')
+    expect(issueTop.getAttribute('tabindex')).toBe('0')
+    expect(issueTop.getAttribute('aria-expanded')).toBe('true')
+    fireEvent.keyDown(issueTop, { key: 'Enter' })
+    expect(issueTop.getAttribute('aria-expanded')).toBe('false')
   })
 })
 

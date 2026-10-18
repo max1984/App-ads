@@ -421,6 +421,11 @@
 .issue-line-link {
   cursor: pointer;
   text-decoration: underline dotted;
+  border: none;
+  background: none;
+  font: inherit;
+  color: inherit;
+  padding: 0;
 }
 .issue-line-link:hover { color: var(--primary); text-decoration: underline; }
 
