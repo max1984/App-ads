@@ -14,6 +14,22 @@ google.com, pub-0000000000000000, DIRECT, f08c47fec0942fa0
 appnexus.com, 1234, RESELLER, f5ab79cb980f11d1`
 
 const LARGE_FILE_THRESHOLD = 2000
+const DARK_MODE_KEY = 'app-ads-dark-mode'
+
+// Manual dark-mode toggle used to be forgotten on every reload, silently
+// reverting to the OS preference — localStorage read/write is best-effort
+// since it can throw (private mode/disabled storage), in which case we just
+// fall back to the OS preference like before.
+function loadStoredDarkMode() {
+  try {
+    const raw = globalThis.localStorage?.getItem(DARK_MODE_KEY)
+    return raw === '1' ? true : raw === '0' ? false : null
+  } catch { return null }
+}
+
+function persistDarkMode(value) {
+  try { globalThis.localStorage?.setItem(DARK_MODE_KEY, value ? '1' : '0') } catch { /* best effort */ }
+}
 
 function formatVersionTime(ts) {
   const diffMs = Date.now() - ts
@@ -71,9 +87,10 @@ export default function App() {
   const [compareId, setCompareId] = useState(null)
   const [versionDiff, setVersionDiff] = useState(null)
   const [savedFlash, setSavedFlash] = useState(false)
-  const [darkMode, setDarkMode] = useState(
-    () => window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false
-  )
+  const [darkMode, setDarkMode] = useState(() => {
+    const stored = loadStoredDarkMode()
+    return stored !== null ? stored : window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false
+  })
 
   const fileInputRef = useRef()
   const versionFileInputRef = useRef()
@@ -84,6 +101,7 @@ export default function App() {
 
   useEffect(() => {
     document.documentElement.setAttribute('data-dark', darkMode ? '1' : '')
+    persistDarkMode(darkMode)
   }, [darkMode])
 
   useEffect(() => {

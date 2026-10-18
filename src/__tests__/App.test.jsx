@@ -154,6 +154,20 @@ describe('App — accessibility', () => {
   })
 })
 
+describe('App — dark mode', () => {
+  it('persists a manual dark mode toggle across remounts instead of reverting to the OS preference', () => {
+    window.matchMedia = () => ({ matches: false }) // OS preference: light
+    const { unmount } = render(<App />)
+    fireEvent.click(screen.getByTitle('Switch to dark mode'))
+    expect(document.documentElement.getAttribute('data-dark')).toBe('1')
+    unmount()
+
+    render(<App />)
+    expect(document.documentElement.getAttribute('data-dark')).toBe('1')
+    expect(screen.getByTitle('Switch to light mode')).toBeTruthy()
+  })
+})
+
 describe('App — gutter', () => {
   it('renders one line number per input line and highlights error lines', () => {
     const { container } = render(<App />)
