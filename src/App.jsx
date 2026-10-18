@@ -80,6 +80,7 @@ export default function App() {
   const inputEditorRef = useRef()
   const validateTimerRef = useRef()
   const batchGenRef = useRef(0)  // BUG-06 FIX: generation counter for race condition
+  const shareStatusTimerRef = useRef()
 
   useEffect(() => {
     document.documentElement.setAttribute('data-dark', darkMode ? '1' : '')
@@ -317,8 +318,14 @@ export default function App() {
     const { url, error } = buildShareUrl(input, `${window.location.origin}${window.location.pathname}`)
     if (error === 'empty') return
     const status = error === 'too-large' ? 'too-large' : error ? 'failed' : (await copyText(url)) ? 'copied' : 'failed'
+    // Without clearing the previous timer, clicking Share again before it
+    // fires leaves TWO pending timers — the stale one (armed for the OLD
+    // status's duration) still fires unconditionally and wipes whatever
+    // status is current, even a longer-lived one from this newer click
+    // (e.g. a 2s "copied" timer erasing a 4s "failed" message 3s early).
+    clearTimeout(shareStatusTimerRef.current)
     setShareStatus(status)
-    setTimeout(() => setShareStatus(null), status === 'copied' ? 2000 : 4000)
+    shareStatusTimerRef.current = setTimeout(() => setShareStatus(null), status === 'copied' ? 2000 : 4000)
   }
 
   const handleJumpToLine = useCallback((lineNumber) => {

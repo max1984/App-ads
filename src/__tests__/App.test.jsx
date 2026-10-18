@@ -80,6 +80,42 @@ describe('App', () => {
     expect(screen.getByText('⚠ Too large to share')).toBeTruthy()
     expect(alertSpy).not.toHaveBeenCalled()
   })
+
+  it(
+    "regression: a stale timer from an earlier Share click doesn't erase a later click's still-valid status " +
+      "message — 'copied' auto-clears after 2s but 'failed'/'too-large' get 4s (so the failure stays visible " +
+      'longer); clicking Share again while the FIRST click\'s 2s timer is still pending armed a second, ' +
+      "independent 4s timer for the new status, but the stale first timer still fired unconditionally and wiped " +
+      'whatever status was current at that moment, not only the one it was originally armed for',
+    async () => {
+      vi.useFakeTimers()
+      // jsdom has no execCommand at all (not even a stub returning false) —
+      // document.execCommand is undefined, so the real implementation would
+      // throw TypeError on a bare call. Stub it fresh per assertion.
+      let execResult = true
+      document.execCommand = vi.fn(() => execResult)
+      render(<App />)
+      typeInput('google.com, pub-1, DIRECT')
+      const shareBtn = screen.getByRole('button', { name: 'Share' })
+
+      // First click succeeds — "Copied!", 2s display — armed at t=0, fires at t=2000.
+      execResult = true
+      await act(async () => { fireEvent.click(shareBtn) })
+      expect(shareBtn.textContent).toContain('Copied')
+
+      // Before that 2s timer fires, a second click fails — "Copy failed", 4s
+      // display — armed at t=1000, should stay visible until t=5000.
+      act(() => { vi.advanceTimersByTime(1000) })
+      execResult = false
+      await act(async () => { fireEvent.click(shareBtn) })
+      expect(shareBtn.textContent).toContain('Copy failed')
+
+      // The first click's stale timer fires now (t=2000 total) — it must not
+      // wipe the second click's still-valid "Copy failed" message 3s early.
+      act(() => { vi.advanceTimersByTime(1000) })
+      expect(shareBtn.textContent).toContain('Copy failed')
+    }
+  )
 })
 
 describe('App — accessibility', () => {
