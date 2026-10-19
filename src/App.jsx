@@ -170,6 +170,13 @@ export default function App() {
   }
 
   const handleLoadUrl = async () => {
+    // The Load button is disabled while urlLoading, but the url-input's Enter
+    // handler below isn't gated on it — pressing Enter again before the first
+    // fetchFromUrl() resolves started a second, fully concurrent fetch with no
+    // generation guard (unlike handleBatchCheck's batchGenRef). Whichever
+    // resolves last then wins, silently overwriting the input/result with its
+    // content even if it was the earlier, now-stale request.
+    if (urlLoading) return
     const url = normalizeAdsTxtUrl(urlValue)
     if (!url) return
     setUrlLoading(true)

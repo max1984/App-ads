@@ -2,6 +2,12 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { render, screen, fireEvent, cleanup, act } from '@testing-library/react'
 import App from '../App.jsx'
+import * as urlModule from '../url.js'
+
+vi.mock('../url.js', async () => {
+  const actual = await vi.importActual('../url.js')
+  return { ...actual, fetchFromUrl: vi.fn() }
+})
 
 beforeEach(() => {
   window.matchMedia = window.matchMedia || (() => ({ matches: false }))
@@ -165,6 +171,33 @@ describe('App — dark mode', () => {
     render(<App />)
     expect(document.documentElement.getAttribute('data-dark')).toBe('1')
     expect(screen.getByTitle('Switch to light mode')).toBeTruthy()
+  })
+})
+
+describe('App — URL loader', () => {
+  it('ignores a second Enter press while the first URL fetch is still in flight, instead of racing two fetches', async () => {
+    let resolveFirst
+    const first = new Promise(resolve => { resolveFirst = resolve })
+    urlModule.fetchFromUrl
+      .mockReturnValueOnce(first)
+      .mockRejectedValueOnce(new Error('should not be called'))
+
+    render(<App />)
+    const urlInput = screen.getByPlaceholderText(/example.com/i)
+
+    fireEvent.change(urlInput, { target: { value: 'first.com' } })
+    fireEvent.keyDown(urlInput, { key: 'Enter' })
+
+    // Fetch #1 is still pending — change the field and press Enter again.
+    // Before the fix this started a second, fully concurrent fetchFromUrl().
+    fireEvent.change(urlInput, { target: { value: 'second.com' } })
+    fireEvent.keyDown(urlInput, { key: 'Enter' })
+
+    expect(urlModule.fetchFromUrl).toHaveBeenCalledTimes(1)
+
+    await act(async () => { resolveFirst('google.com, pub-1, DIRECT') })
+
+    expect(screen.getByLabelText('app-ads.txt input').value).toBe('google.com, pub-1, DIRECT')
   })
 })
 
