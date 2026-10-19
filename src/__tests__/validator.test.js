@@ -214,6 +214,19 @@ describe('validateAdsTxt — cert ID mismatch', () => {
     expect(w.suggestion).toBe('Change to: google.com, pub-1, DIRECT, f08c47fec0942fa0')
   })
 
+  it(
+    'still warns when the mismatched cert belongs to an unrelated company whose name happens to ' +
+      'start with the same generic word ("The") as the expected one — companyOf() used to compare ' +
+      'only the first word, so "The Media Grid" and "The Brave" looked like the same company and ' +
+      'this genuine mismatch went completely undetected',
+    () => {
+      const r = validateAdsTxt(OWNER + 'themediagrid.com, pub-1, DIRECT, c25b2154543746ac')
+      const w = r.issues.find(i => /belongs to The Brave/.test(i.message))
+      expect(w.severity).toBe('warning')
+      expect(w.suggestion).toBe('Change to: themediagrid.com, pub-1, DIRECT, 35d5010d7789b49d')
+    }
+  )
+
   it('accepts alternate certs of the same company', () => {
     const r = validateAdsTxt(OWNER + 'criteo.com, 1, DIRECT, 3fd707be9c4527c3')
     expect(r.stats.warnings).toBe(0)

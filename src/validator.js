@@ -330,7 +330,11 @@ function worstOf(a, b) {
 // that one line. Tolerating undefined/missing names turns a future table edit that breaks
 // this invariant into a harmless wrong-looking warning instead of a hard crash.
 function companyOf(name) {
-  return (name ?? '').split(/[\s(/]/)[0].toLowerCase()
+  // Strip a leading "The " first — 'The Media Grid' and 'The Brave' are unrelated companies
+  // that both start with this generic article, so without stripping it, the first-word
+  // comparison below would treat them as the same company and silently miss a genuine
+  // cert-mismatch between their domains instead of warning about it.
+  return (name ?? '').replace(/^the\s+/i, '').split(/[\s(/]/)[0].toLowerCase()
 }
 
 // Strips scheme, path, query and case: 'https://Google.com/x' → 'google.com'.
