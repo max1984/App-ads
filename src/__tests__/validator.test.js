@@ -230,6 +230,16 @@ describe('validateAdsTxt — cert ID mismatch (same company)', () => {
     const r = validateAdsTxt(OWNER + 'google.com, pub-1, DIRECT, 7842df1d2fe2db34')
     expect(r.stats.warnings).toBe(0)
   })
+
+  it(
+    'does not warn for yahoo.com\'s alternate Verizon Media / Oath cert — same company across ' +
+      "its rebrand history as the cert yahoo.com normally uses, so it was wrongly labeled " +
+      '"Verizon Media / Oath" instead of starting with "Yahoo", tripping the different-company check',
+    () => {
+      const r = validateAdsTxt(OWNER + 'yahoo.com, pub-1, DIRECT, e1a5b5b704a45b4e')
+      expect(r.stats.warnings).toBe(0)
+    }
+  )
 })
 
 describe('validateAdsTxt — MANAGERDOMAIN country code', () => {

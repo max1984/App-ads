@@ -85,7 +85,10 @@ export const VALID_CA_IDS = {
   '9f5210a2f0999e32': 'Adform',
   // Yahoo / Verizon Media
   'e1a5b5b6e3255540': 'Yahoo (Verizon Media)',
-  'e1a5b5b704a45b4e': 'Verizon Media / Oath',
+  // Same company as the ID above across its rebrand history — must stay named "Yahoo (...)"
+  // (not e.g. "Verizon Media / Oath") so companyOf() resolves both to the same first word and
+  // this alternate cert doesn't trip the "belongs to a different company" mismatch warning.
+  'e1a5b5b704a45b4e': 'Yahoo (Verizon Media / Oath)',
   // Unruly Media
   '6f752381ad5ec0e5': 'Unruly Media',
   // AdColony (Digital Turbine)
