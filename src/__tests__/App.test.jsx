@@ -143,6 +143,41 @@ describe('App — accessibility', () => {
     expect(screen.getByRole('button', { name: /AppNexus/ })).toBeTruthy()
   })
 
+  it(
+    "regression: a stale timer from copying one missing network's template doesn't erase a later copy's still-" +
+      "valid \"copied!\" badge on a DIFFERENT network — copiedNetwork is ONE state value shared by every coverage " +
+      "item, not one per item; copying AppNexus's template arms a 2s clear-timer, and copying Rubicon's 1s later " +
+      "(while AppNexus's \"copied!\" is still showing) overwrote the value to Rubicon's domain and armed a SECOND, " +
+      "independent 2s timer, but AppNexus's stale (earlier) timer still fired unconditionally at its own t=2000 " +
+      "and wiped Rubicon's still-valid badge a full second early",
+    async () => {
+      vi.useFakeTimers()
+      document.execCommand = vi.fn(() => true)
+      render(<App />)
+      typeInput('google.com, pub-1, DIRECT')
+      fireEvent.click(screen.getByRole('button', { name: /Validate/ }))
+      fireEvent.click(screen.getByRole('button', { name: /Network Coverage/ }))
+
+      const appnexusBtn = screen.getByTitle(/AppNexus/)
+      const rubiconBtn = screen.getByTitle(/Rubicon/)
+
+      // Copy AppNexus's template at t=0 — its clear-timer is armed for t=2000.
+      await act(async () => { fireEvent.click(appnexusBtn) })
+      expect(appnexusBtn.textContent).toContain('copied!')
+
+      // 1s later, copy Rubicon's — its own clear-timer is armed for t=3000.
+      act(() => { vi.advanceTimersByTime(1000) })
+      await act(async () => { fireEvent.click(rubiconBtn) })
+      expect(rubiconBtn.textContent).toContain('copied!')
+
+      // AppNexus's stale timer fires now (t=2000 total) — it must not wipe
+      // Rubicon's still-valid "copied!" badge a full second before Rubicon's
+      // own 2s is up.
+      act(() => { vi.advanceTimersByTime(1000) })
+      expect(rubiconBtn.textContent).toContain('copied!')
+    }
+  )
+
   it('exposes an issue\'s "jump to line" link as a real nested button, and its parent toggle as a keyboard-operable role=button', () => {
     render(<App />)
     typeInput('OWNERDOMAIN=a.com\nfoo.com, 1')

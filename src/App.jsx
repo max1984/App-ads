@@ -98,6 +98,7 @@ export default function App() {
   const validateTimerRef = useRef()
   const batchGenRef = useRef(0)  // BUG-06 FIX: generation counter for race condition
   const shareStatusTimerRef = useRef()
+  const copiedNetworkTimerRef = useRef()
 
   useEffect(() => {
     document.documentElement.setAttribute('data-dark', darkMode ? '1' : '')
@@ -402,8 +403,14 @@ export default function App() {
       ? `${network.domain}, YOUR_PUBLISHER_ID, DIRECT, ${cert}`
       : `${network.domain}, YOUR_PUBLISHER_ID, DIRECT`
     if (!(await copyText(line))) return
+    // Same stale-timer race as shareStatusTimerRef above: copying network A's
+    // template arms a 2s clear-timer, and copying network B's within that
+    // window would arm a second, independent one — without clearing A's
+    // first, A's timer still fires at its own t=2000 and wipes B's
+    // still-valid "copied" feedback early.
+    clearTimeout(copiedNetworkTimerRef.current)
     setCopiedNetwork(network.domain)
-    setTimeout(() => setCopiedNetwork(null), 2000)
+    copiedNetworkTimerRef.current = setTimeout(() => setCopiedNetwork(null), 2000)
   }
 
   const handleExpandAll  = () => setCollapsedIssues(new Set())
