@@ -293,9 +293,16 @@ export default function App() {
     reader.onload = (e) => {
       try {
         const imported = JSON.parse(e.target.result)
-        const { versions: merged } = mergeImportedVersions(versions, imported, MAX_VERSIONS)
-        setVersions(merged)
-        persistVersions(merged)
+        // FileReader is async — reading `versions` here (closed over at the click that
+        // started the read) would merge against whatever the list looked like back then,
+        // silently discarding a save/rename/delete that completed while the file was being
+        // read. Merge against the functional-updater's `prev` instead, so this always sees
+        // the current list — same race class as handleBatchCheck's batchGenRef guards against.
+        setVersions(prev => {
+          const { versions: merged } = mergeImportedVersions(prev, imported, MAX_VERSIONS)
+          persistVersions(merged)
+          return merged
+        })
       } catch { /* not a version history file, or malformed JSON — ignore */ }
     }
     reader.readAsText(file, 'utf-8')

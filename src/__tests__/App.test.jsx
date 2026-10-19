@@ -201,6 +201,39 @@ describe('App — URL loader', () => {
   })
 })
 
+describe('App — version history', () => {
+  it(
+    'does not lose a version saved while a history import is still reading the file — ' +
+      "handleImportVersions's FileReader.onload used to merge the imported file into the `versions` " +
+      'closed over at click time, so a save that completed during the (async) file read was silently ' +
+      'overwritten once the import finished, the same stale-closure race already guarded against ' +
+      'elsewhere in this file (handleBatchCheck, handleApplyFix)',
+    async () => {
+      render(<App />)
+      fireEvent.click(screen.getByRole('button', { name: /Version history/ }))
+      typeInput('a.com, 1, DIRECT')
+
+      const jsonInput = document.querySelector('input[type="file"][accept*="json"]')
+      const imported = [{ id: 'imported-1', label: 'Imported', timestamp: 1000, content: 'b.com, 2, DIRECT', stats: null }]
+      const file = new File([JSON.stringify(imported)], 'app-ads-versions.json', { type: 'application/json' })
+
+      // Start the import — FileReader.readAsText() is asynchronous, so its onload
+      // hasn't fired yet when this returns.
+      fireEvent.change(jsonInput, { target: { files: [file] } })
+
+      // While that read is still in flight, save a version synchronously.
+      fireEvent.click(screen.getByRole('button', { name: /Save current as version/ }))
+      expect(screen.getByText('Version 1')).toBeTruthy()
+
+      // Let the FileReader's onload callback run.
+      await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)) })
+
+      expect(screen.getByText('Imported')).toBeTruthy()
+      expect(screen.getByText('Version 1')).toBeTruthy()
+    }
+  )
+})
+
 describe('App — gutter', () => {
   it('renders one line number per input line and highlights error lines', () => {
     const { container } = render(<App />)
