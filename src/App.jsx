@@ -1076,6 +1076,16 @@ function IssueCard({ issue, expanded, onToggle, onJumpToLine, onApplyFix }) {
         tabIndex={0}
         onClick={onToggle}
         onKeyDown={e => {
+          // Keydown bubbles, so without this check, pressing Enter/Space
+          // while focus is on the nested "Jump to this line" <button> above
+          // also fired HERE (toggling the card) in addition to — and via
+          // preventDefault, INSTEAD of — the real button's own native
+          // Enter/Space-activates-click behavior. The mouse-click equivalent
+          // of this is already guarded (the inner button's onClick calls
+          // e.stopPropagation()); this is the keydown counterpart, checked
+          // on the outer element instead since a real <button> shouldn't
+          // need a hand-rolled onKeyDown of its own.
+          if (e.target !== e.currentTarget) return
           if (e.key !== 'Enter' && e.key !== ' ') return
           e.preventDefault()
           onToggle()

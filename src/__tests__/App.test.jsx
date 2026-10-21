@@ -193,6 +193,27 @@ describe('App — accessibility', () => {
     fireEvent.keyDown(issueTop, { key: 'Enter' })
     expect(issueTop.getAttribute('aria-expanded')).toBe('false')
   })
+
+  it(
+    'regression: pressing Enter/Space while focus is on the nested "jump to line" button must ' +
+      "NOT also toggle the parent card — keydown bubbles from that real <button> up to the " +
+      "outer role=button's onKeyDown, which used to fire unconditionally and both wrongly " +
+      "toggled the card and (via preventDefault) suppressed the button's own native activation",
+    () => {
+      render(<App />)
+      typeInput('OWNERDOMAIN=a.com\nfoo.com, 1')
+      fireEvent.click(screen.getByRole('button', { name: /Validate/ }))
+      const jumpLink = screen.getByTitle('Jump to this line in the editor')
+      const issueTop = jumpLink.closest('[role="button"]')
+      expect(issueTop.getAttribute('aria-expanded')).toBe('true')
+
+      fireEvent.keyDown(jumpLink, { key: 'Enter', bubbles: true })
+      expect(issueTop.getAttribute('aria-expanded')).toBe('true')
+
+      fireEvent.keyDown(jumpLink, { key: ' ', bubbles: true })
+      expect(issueTop.getAttribute('aria-expanded')).toBe('true')
+    }
+  )
 })
 
 describe('App — dark mode', () => {
