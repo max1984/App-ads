@@ -228,6 +228,22 @@ describe('App — dark mode', () => {
     expect(document.documentElement.getAttribute('data-dark')).toBe('1')
     expect(screen.getByTitle('Switch to light mode')).toBeTruthy()
   })
+
+  it(
+    'regression: switching back to light mode removes the data-dark attribute entirely, not ' +
+      "just empties its value — index.css's override selector is [data-dark], which matches " +
+      'on attribute PRESENCE regardless of value, so leaving it set to \'\' kept dark styling ' +
+      'applied and made the toggle look like it did nothing once clicked back to light',
+    () => {
+      window.matchMedia = () => ({ matches: false })
+      render(<App />)
+      fireEvent.click(screen.getByTitle('Switch to dark mode'))
+      expect(document.documentElement.hasAttribute('data-dark')).toBe(true)
+
+      fireEvent.click(screen.getByTitle('Switch to light mode'))
+      expect(document.documentElement.hasAttribute('data-dark')).toBe(false)
+    }
+  )
 })
 
 describe('App — URL loader', () => {

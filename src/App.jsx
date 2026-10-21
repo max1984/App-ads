@@ -101,7 +101,13 @@ export default function App() {
   const copiedNetworkTimerRef = useRef()
 
   useEffect(() => {
-    document.documentElement.setAttribute('data-dark', darkMode ? '1' : '')
+    // index.css's dark-mode override is `[data-dark]` — an attribute-PRESENCE
+    // selector, matching regardless of the attribute's value. Setting it to
+    // '' for light mode still left the attribute present, so dark styling
+    // applied unconditionally and the toggle never visually did anything —
+    // must remove the attribute entirely for light mode, not just empty it.
+    if (darkMode) document.documentElement.setAttribute('data-dark', '1')
+    else document.documentElement.removeAttribute('data-dark')
     persistDarkMode(darkMode)
   }, [darkMode])
 
