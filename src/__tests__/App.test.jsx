@@ -306,6 +306,26 @@ describe('App — version history', () => {
       expect(screen.getByText('Version 1')).toBeTruthy()
     }
   )
+
+  it(
+    'asks for confirmation before deleting a saved version, and keeps it when the user declines',
+    () => {
+      render(<App />)
+      fireEvent.click(screen.getByRole('button', { name: /Version history/ }))
+      typeInput('a.com, 1, DIRECT')
+      fireEvent.click(screen.getByRole('button', { name: /Save current as version/ }))
+      expect(screen.getByText('Version 1')).toBeTruthy()
+
+      const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false)
+      fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+      expect(confirmSpy).toHaveBeenCalledTimes(1)
+      expect(screen.getByText('Version 1')).toBeTruthy()
+
+      confirmSpy.mockReturnValue(true)
+      fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+      expect(screen.queryByText('Version 1')).toBeFalsy()
+    }
+  )
 })
 
 describe('App — gutter', () => {

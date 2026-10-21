@@ -271,6 +271,11 @@ export default function App() {
   }
 
   const handleDeleteVersion = (id) => {
+    // Unlike every other version action (Restore/Compare are non-destructive,
+    // Rename already asks via window.prompt), this one is a silent, permanent
+    // delete with no undo — a single stray click on the small icon-sized
+    // "Delete" button in a scrollable list loses saved history for good.
+    if (!window.confirm('Delete this version? This cannot be undone.')) return
     const next = versions.filter(v => v.id !== id)
     setVersions(next)
     persistVersions(next)
