@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { render, screen, fireEvent, cleanup, act } from '@testing-library/react'
+import { render, screen, fireEvent, cleanup, act, waitFor } from '@testing-library/react'
 import App from '../App.jsx'
 import * as urlModule from '../url.js'
 
@@ -297,10 +297,12 @@ describe('App — version history', () => {
       fireEvent.click(screen.getByRole('button', { name: /Save current as version/ }))
       expect(screen.getByText('Version 1')).toBeTruthy()
 
-      // Let the FileReader's onload callback run.
-      await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)) })
-
-      expect(screen.getByText('Imported')).toBeTruthy()
+      // Let the FileReader's onload callback run. jsdom's FileReader resolves
+      // through its own chain of nested macrotasks, whose exact depth isn't
+      // guaranteed across Node/jsdom versions — a single `setTimeout(0)` tick
+      // was enough locally but flaked in CI (a different Node major), so
+      // poll instead of assuming one tick suffices.
+      await waitFor(() => expect(screen.getByText('Imported')).toBeTruthy())
       expect(screen.getByText('Version 1')).toBeTruthy()
     }
   )
