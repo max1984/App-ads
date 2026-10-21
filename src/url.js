@@ -1,13 +1,24 @@
 // Turns user input like "example.com" or "https://example.com/" into the canonical
 // app-ads.txt location. Without this, a bare domain is fetched as a *relative* URL
 // against the validator's own origin.
+//
+// The IAB spec requires app-ads.txt to live at the domain root — there is no
+// such thing as a legitimate non-root location for it. This used to only
+// fill in the path when it was empty/"/", leaving an explicit path (e.g.
+// pasted from a browser's address bar, or hand-typed) untouched. A single
+// typo'd path (e.g. "app-apds.txt") then got fetched literally: no local
+// 404 (many sites answer any unknown path with a redirect to their
+// homepage/PWA shell instead), just a confusing failure with no indication
+// the path itself was wrong. Always forcing the canonical path removes that
+// whole failure mode — whatever path was typed, root is the only place this
+// file can actually be.
 export function normalizeAdsTxtUrl(input) {
   let raw = (input || '').trim()
   if (!raw) return ''
   if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(raw)) raw = `https://${raw.replace(/^\/+/, '')}`
   let url
   try { url = new URL(raw) } catch { return raw }
-  if (url.pathname === '' || url.pathname === '/') url.pathname = '/app-ads.txt'
+  url.pathname = '/app-ads.txt'
   return url.toString()
 }
 

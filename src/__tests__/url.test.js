@@ -11,10 +11,17 @@ describe('normalizeAdsTxtUrl', () => {
     expect(normalizeAdsTxtUrl('http://example.com')).toBe('http://example.com/app-ads.txt')
   })
 
-  it('leaves explicit paths untouched', () => {
-    expect(normalizeAdsTxtUrl('https://example.com/ads.txt')).toBe('https://example.com/ads.txt')
-    expect(normalizeAdsTxtUrl('example.com/custom/app-ads.txt')).toBe('https://example.com/custom/app-ads.txt')
-  })
+  it(
+    'forces any explicit path to the canonical /app-ads.txt — the IAB spec requires it at ' +
+      'the domain root, so there is no legitimate reason to fetch a different path, and a ' +
+      "typo'd one (e.g. pasted from elsewhere) used to fail confusingly instead of just " +
+      'being corrected',
+    () => {
+      expect(normalizeAdsTxtUrl('https://example.com/ads.txt')).toBe('https://example.com/app-ads.txt')
+      expect(normalizeAdsTxtUrl('example.com/custom/app-ads.txt')).toBe('https://example.com/app-ads.txt')
+      expect(normalizeAdsTxtUrl('example.com/app-apds.txt')).toBe('https://example.com/app-ads.txt')
+    }
+  )
 
   it('returns empty string for empty input', () => {
     expect(normalizeAdsTxtUrl('   ')).toBe('')
