@@ -40,6 +40,29 @@ describe('App', () => {
     expect(screen.getByTitle(/File quality score/).textContent).toBe('A100')
   })
 
+  it(
+    'defers revoking the download blob URL instead of revoking it synchronously ' +
+      "right after the click — some browsers read the blob asynchronously, so an " +
+      'immediate revoke can race the read and silently abort the download',
+    () => {
+      vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:fake')
+      const revokeSpy = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
+      // jsdom doesn't honor the `download` attribute and tries to actually
+      // navigate a real anchor click (which it then can't do for a blob:
+      // URL) — irrelevant to what this test checks, so skip it.
+      vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+      render(<App />)
+      typeInput('OWNERDOMAIN=example.com\nGoogle.com, pub-1, direct')
+      fireEvent.click(screen.getByRole('button', { name: /Validate/ }))
+      fireEvent.click(screen.getByRole('button', { name: 'Download .txt' }))
+      expect(revokeSpy).not.toHaveBeenCalled()
+      return new Promise(resolve => setTimeout(() => {
+        expect(revokeSpy).toHaveBeenCalledWith('blob:fake')
+        resolve()
+      }, 0))
+    }
+  )
+
   it('offers an Apply fix for cert mismatches and applies it', () => {
     render(<App />)
     typeInput('OWNERDOMAIN=example.com\ngoogle.com, pub-1, DIRECT, c3e20eee3f780d68')

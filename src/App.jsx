@@ -47,7 +47,12 @@ function downloadFile(content, filename, type) {
   const url = URL.createObjectURL(new Blob([content], { type }))
   const a = document.createElement('a')
   a.href = url; a.download = filename; a.click()
-  URL.revokeObjectURL(url)
+  // a.click() only *triggers* the download — some browsers (notably older
+  // Firefox/Safari) read the blob asynchronously, so revoking the object
+  // URL on the very next line can race the read and silently abort the
+  // download. Deferring to a macrotask lets the browser actually start
+  // reading first.
+  setTimeout(() => URL.revokeObjectURL(url), 0)
 }
 
 // BUG-05 FIX: semaphore to cap batch concurrency at 5
