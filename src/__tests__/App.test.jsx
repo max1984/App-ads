@@ -331,6 +331,28 @@ describe('App — version history', () => {
   )
 
   it(
+    'shows a failure flash instead of "Saved!" when localStorage.setItem throws (quota exceeded, private mode)',
+    () => {
+      render(<App />)
+      fireEvent.click(screen.getByRole('button', { name: /Version history/ }))
+      typeInput('a.com, 1, DIRECT')
+
+      vi.spyOn(window.localStorage, 'setItem').mockImplementation(() => {
+        throw new Error('QuotaExceededError')
+      })
+      fireEvent.click(screen.getByRole('button', { name: /Save current as version/ }))
+
+      // The version still shows up in memory for this session...
+      expect(screen.getByText('Version 1')).toBeTruthy()
+      // ...but the button must not claim the save succeeded when persistVersions()
+      // actually failed — that would look identical to a real save until the
+      // version silently vanishes on the next reload.
+      expect(screen.queryByText('✓ Saved!')).toBeFalsy()
+      expect(screen.getByRole('button', { name: /Save failed/ })).toBeTruthy()
+    }
+  )
+
+  it(
     'asks for confirmation before deleting a saved version, and keeps it when the user declines',
     () => {
       render(<App />)

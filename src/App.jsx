@@ -91,7 +91,7 @@ export default function App() {
   const [versions, setVersions] = useState(() => loadVersions())
   const [compareId, setCompareId] = useState(null)
   const [versionDiff, setVersionDiff] = useState(null)
-  const [savedFlash, setSavedFlash] = useState(false)
+  const [savedFlash, setSavedFlash] = useState(null)  // null | 'saved' | 'failed'
   const [darkMode, setDarkMode] = useState(() => {
     const stored = loadStoredDarkMode()
     return stored !== null ? stored : window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false
@@ -104,6 +104,7 @@ export default function App() {
   const batchGenRef = useRef(0)  // BUG-06 FIX: generation counter for race condition
   const shareStatusTimerRef = useRef()
   const copiedNetworkTimerRef = useRef()
+  const savedFlashTimerRef = useRef()
 
   useEffect(() => {
     // index.css's dark-mode override is `[data-dark]` — an attribute-PRESENCE
@@ -260,9 +261,18 @@ export default function App() {
     }
     const next = [entry, ...versions].slice(0, MAX_VERSIONS)
     setVersions(next)
-    persistVersions(next)
-    setSavedFlash(true)
-    setTimeout(() => setSavedFlash(false), 2000)
+    // persistVersions() can fail (storage quota exceeded, private mode) while
+    // setVersions() above always succeeds in memory — without checking the
+    // return value, the button would flash "✓ Saved!" even though nothing
+    // was actually written, the same "success state shown without checking
+    // the operation's result" bug class already guarded against for
+    // copyText() in handleShare/handleCopyUrl/handleCopyOutput. A failed save
+    // here is worse: it looks identical to a real one until the next reload
+    // silently drops the version.
+    const ok = persistVersions(next)
+    clearTimeout(savedFlashTimerRef.current)
+    setSavedFlash(ok ? 'saved' : 'failed')
+    savedFlashTimerRef.current = setTimeout(() => setSavedFlash(null), ok ? 2000 : 4000)
   }
 
   const handleRenameVersion = (id) => {
@@ -602,7 +612,7 @@ export default function App() {
             </div>
             <div className="batch-actions">
               <button className="btn btn-primary" onClick={handleSaveVersion} disabled={!input.trim() || versions[0]?.content === input}>
-                {savedFlash ? '✓ Saved!' : 'Save current as version'}
+                {savedFlash === 'saved' ? '✓ Saved!' : savedFlash === 'failed' ? '⚠ Save failed (storage full?)' : 'Save current as version'}
               </button>
               {versions.length > 0 && (
                 <>
