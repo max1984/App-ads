@@ -145,6 +145,37 @@ describe('App', () => {
       expect(shareBtn.textContent).toContain('Copy failed')
     }
   )
+
+  it(
+    "regression: a stale timer from an earlier Copy click doesn't hide a later click's " +
+      "'Copied!' flash early — clicking Copy again within the first click's 2s window used to " +
+      "arm a second, independent timer without clearing the first, so the first still fired at " +
+      "its own t=2000 and hid the flash 1s before the second click's own 2s was up",
+    async () => {
+      vi.useFakeTimers()
+      // navigator.clipboard is undefined in jsdom, so copyText() falls back
+      // to execCommand — same stub as the Share regression test above.
+      document.execCommand = vi.fn(() => true)
+      render(<App />)
+      typeInput('google.com, pub-1, DIRECT')
+      fireEvent.click(screen.getByRole('button', { name: /Validate/ }))
+      const copyBtn = screen.getByRole('button', { name: 'Copy' })
+
+      // First click at t=0 — fires at t=2000.
+      await act(async () => { fireEvent.click(copyBtn) })
+      expect(copyBtn.textContent).toContain('Copied')
+
+      // Second click at t=1000 — should keep the flash until t=3000.
+      act(() => { vi.advanceTimersByTime(1000) })
+      await act(async () => { fireEvent.click(copyBtn) })
+      expect(copyBtn.textContent).toContain('Copied')
+
+      // The first click's stale timer fires now (t=2000 total) — must not
+      // hide the second click's still-valid flash 1s early.
+      act(() => { vi.advanceTimersByTime(1000) })
+      expect(copyBtn.textContent).toContain('Copied')
+    }
+  )
 })
 
 describe('App — accessibility', () => {

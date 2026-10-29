@@ -105,6 +105,7 @@ export default function App() {
   const shareStatusTimerRef = useRef()
   const copiedNetworkTimerRef = useRef()
   const savedFlashTimerRef = useRef()
+  const copiedOutputTimerRef = useRef()
 
   useEffect(() => {
     // index.css's dark-mode override is `[data-dark]` — an attribute-PRESENCE
@@ -354,8 +355,14 @@ export default function App() {
   const handleCopyOutput = async () => {
     if (!result) return
     if (!(await copyText(displayContent))) return
+    // Same stale-timer race as shareStatusTimerRef/copiedNetworkTimerRef:
+    // clicking Copy again within 2s armed a second, independent timer
+    // without clearing the first, so the first still fired at its own
+    // t=2000 and hid the "Copied!" flash early instead of the full 2s
+    // from the latest click.
+    clearTimeout(copiedOutputTimerRef.current)
     setCopiedOutput(true)
-    setTimeout(() => setCopiedOutput(false), 2000)
+    copiedOutputTimerRef.current = setTimeout(() => setCopiedOutput(false), 2000)
   }
 
   const handleDownload = () => {
@@ -1021,12 +1028,17 @@ function DiffRow({ change, onJumpToLine }) {
 
 function BatchResultRow({ item, onLoad }) {
   const [copiedUrl, setCopiedUrl] = useState(false)
+  const copiedUrlTimerRef = useRef()
 
   const handleCopyUrl = async (e) => {
     e.stopPropagation()
     if (!(await copyText(item.url))) return
+    // Same stale-timer race as handleCopyOutput/shareStatusTimerRef above:
+    // clicking Copy twice within 2s without clearing the first timer lets
+    // it fire at its own t=2000 and hide the "Copied!" flash early.
+    clearTimeout(copiedUrlTimerRef.current)
     setCopiedUrl(true)
-    setTimeout(() => setCopiedUrl(false), 2000)
+    copiedUrlTimerRef.current = setTimeout(() => setCopiedUrl(false), 2000)
   }
 
   if (item.status === 'loading') {
