@@ -525,7 +525,6 @@ export function validateAdsTxt(content) {
       return
     }
     seenRecords.add(recordKey)
-    seenDomains.add(domain)
 
     const lineIssues = []
     let certId = rawCertLower
@@ -625,6 +624,13 @@ export function validateAdsTxt(content) {
     lineIssues.forEach(i => pushIssue(i))
 
     const worstLineSeverity = lineIssues.reduce((w, i) => worstOf(w, i.severity), null)
+
+    // Network Coverage should only count a network as "present" when this line is
+    // actually usable — a record with an error (invalid relationship, empty publisher
+    // ID, malformed cert) wouldn't be honored by the ad network, so marking it ✓ here
+    // would hide a broken entry behind a false "covered" status, and the coverage grid
+    // wouldn't offer the user a way to fix it (only "missing" entries are clickable).
+    if (worstLineSeverity !== 'error') seenDomains.add(domain)
 
     const wasCorrected = !certWasFilled && (
       parts[0] !== domain ||

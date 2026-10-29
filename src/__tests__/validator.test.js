@@ -71,6 +71,18 @@ describe('validateAdsTxt — records', () => {
     expect(r.coverage.present.map(n => n.domain)).toContain('google.com')
     expect(r.coverage.missing.map(n => n.domain)).not.toContain('google.com')
   })
+
+  it(
+    'regression: a line with an error (invalid relationship) was still counted as ' +
+      '"present" in Network Coverage just because its domain matched — an ad network ' +
+      'would never honor a broken line, so it must show as missing, not a false ✓',
+    () => {
+      const r = validateAdsTxt(OWNER + 'google.com, pub-1, directt')
+      expect(r.stats.errors).toBeGreaterThan(0)
+      expect(r.coverage.present.map(n => n.domain)).not.toContain('google.com')
+      expect(r.coverage.missing.map(n => n.domain)).toContain('google.com')
+    }
+  )
 })
 
 describe('validateAdsTxt — variables', () => {
