@@ -657,7 +657,12 @@ export function validateAdsTxt(content) {
 
     if (certWasFilled) {
       changes.push({ lineNumber, original: stripped, cleaned: cleanedLine, type: 'cert-added' })
-    } else if (wasCorrected) {
+    } else if (wasCorrected && worstLineSeverity !== 'error') {
+      // A line can need text normalization (domain casing, relationship casing) AND
+      // carry a real error (e.g. invalid relationship) at the same time. Without this
+      // guard it was counted in the "N normalized" pill and listed in the Changes diff
+      // as if auto-cleaned, even though it's still broken and needs the user's attention
+      // via the Issues panel instead — same reasoning as seenDomains' error guard above.
       changes.push({ lineNumber, original: stripped, cleaned: cleanedLine, type: 'corrected' })
     }
 

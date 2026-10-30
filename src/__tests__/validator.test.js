@@ -11,6 +11,15 @@ describe('validateAdsTxt — records', () => {
     expect(r.changes).toHaveLength(1)
   })
 
+  it('does not list an error line as "corrected" just because it also needed case normalization', () => {
+    // Domain casing needs cleanup (Example.COM -> example.com) AND the relationship is
+    // invalid (BOGUS) — the line must surface only as an error, not also appear in the
+    // "normalized" Changes pill as if it were a benign auto-fix.
+    const r = validateAdsTxt(OWNER + 'Example.COM, pub-1, BOGUS')
+    expect(r.outputLineStatuses[1]).toBe('error')
+    expect(r.changes).toHaveLength(0)
+  })
+
   it('auto-fills known cert IDs', () => {
     const r = validateAdsTxt(OWNER + 'google.com, pub-1, DIRECT')
     expect(r.records[0].certId).toBe('f08c47fec0942fa0')
