@@ -38,6 +38,16 @@ describe('validateAdsTxt — records', () => {
     expect(err.suggestion).toMatch(/DIRECT/)
   })
 
+  it('suggests RESELLER (not DIRECT) for a relationship typo of "indirect"', () => {
+    // 'indirect' contains 'direct' as a substring — a naive check would guess the
+    // opposite of what the word means, since an indirect relationship is exactly
+    // what RESELLER represents.
+    const r = validateAdsTxt(OWNER + 'foo.com, 1, indirect')
+    const err = r.issues.find(i => i.severity === 'error')
+    expect(err.suggestion).toMatch(/RESELLER/)
+    expect(err.suggestion).not.toMatch(/,\s*DIRECT/)
+  })
+
   it('flags too few fields', () => {
     const r = validateAdsTxt(OWNER + 'foo.com, 1')
     expect(r.stats.errors).toBe(1)

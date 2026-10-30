@@ -566,7 +566,12 @@ export function validateAdsTxt(content) {
 
     if (relationship !== 'DIRECT' && relationship !== 'RESELLER') {
       const lower = parts[2].toLowerCase()
-      const guess = lower.includes('direct') ? 'DIRECT' : lower.includes('resell') ? 'RESELLER' : null
+      // Check 'indirect'/'resell' before the bare 'direct' substring — 'indirect' contains
+      // 'direct' as a substring, so a naive direct-first check would guess the opposite of
+      // what the word means (an indirect relationship is exactly what RESELLER represents).
+      const guess = lower.includes('indirect') || lower.includes('resell')
+        ? 'RESELLER'
+        : lower.includes('direct') ? 'DIRECT' : null
       lineIssues.push({
         severity: 'error', lineNumber,
         message: `Invalid relationship '${relationship}' — must be DIRECT or RESELLER.`,
