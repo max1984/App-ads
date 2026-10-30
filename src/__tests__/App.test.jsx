@@ -485,6 +485,40 @@ describe('App — version history', () => {
   )
 })
 
+describe('App — batch check', () => {
+  it(
+    'does not leave "Check all URLs" stuck disabled when Clear results is clicked mid-flight',
+    async () => {
+      let resolveFetch
+      urlModule.fetchFromUrl.mockReturnValue(new Promise(resolve => { resolveFetch = resolve }))
+
+      render(<App />)
+      fireEvent.click(screen.getByRole('button', { name: /Batch URL check/ }))
+      fireEvent.change(screen.getByLabelText('URLs to check, one per line'), {
+        target: { value: 'a.com\nb.com' },
+      })
+      fireEvent.click(screen.getByRole('button', { name: 'Check all URLs' }))
+      expect(screen.getByRole('button', { name: 'Checking…' })).toBeTruthy()
+
+      // The fetch above is still pending — Clear results is never disabled
+      // during a check (unlike Export CSV right next to it), so a user can
+      // click it mid-flight.
+      fireEvent.click(screen.getByRole('button', { name: 'Clear results' }))
+
+      // Before the fix: bumping batchGenRef here made the in-flight
+      // handleBatchCheck's own `if (batchGenRef.current === gen)` guard in
+      // its finally block fail, so it never called setBatchLoading(false) —
+      // and nothing else ever did either, leaving the button stuck showing
+      // "Checking…" (disabled) forever, even with no results and nothing
+      // actually running.
+      expect(screen.getByRole('button', { name: 'Check all URLs' })).toBeTruthy()
+      expect(screen.queryByRole('button', { name: 'Checking…' })).toBeFalsy()
+
+      await act(async () => { resolveFetch('google.com, pub-1, DIRECT') })
+    }
+  )
+})
+
 describe('App — gutter', () => {
   it('renders one line number per input line and highlights error lines', () => {
     const { container } = render(<App />)

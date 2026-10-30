@@ -597,7 +597,21 @@ export default function App() {
                 </button>
               )}
               {batchResults.length > 0 && (
-                <button className="btn btn-ghost" onClick={() => { setBatchResults([]); batchGenRef.current++ }}>
+                <button
+                  className="btn btn-ghost"
+                  onClick={() => {
+                    // Not disabled during batchLoading like the buttons above — this
+                    // one doubles as "cancel": bumping batchGenRef makes handleBatchCheck's
+                    // own finally skip its `setBatchLoading(false)` (its gen no longer
+                    // matches), since that guard exists specifically to let a newer
+                    // batch's own completion own the final state. Without resetting
+                    // batchLoading here too, nothing else ever does — "Check all URLs"
+                    // stayed disabled and stuck on "Checking…" forever, until reload.
+                    setBatchResults([])
+                    setBatchLoading(false)
+                    batchGenRef.current++
+                  }}
+                >
                   Clear results
                 </button>
               )}
