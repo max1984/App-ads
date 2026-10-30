@@ -283,7 +283,14 @@ export default function App() {
     if (!label || !label.trim()) return
     const next = versions.map(x => x.id === id ? { ...x, label: label.trim() } : x)
     setVersions(next)
-    persistVersions(next)
+    // persistVersions()'s return value is already checked in handleSaveVersion
+    // (storage quota / private mode can make the write fail while the
+    // in-memory list always updates) — this sibling call ignored it, so a
+    // failed rename looked identical to a real one until the next reload
+    // silently reverted the label.
+    if (!persistVersions(next)) {
+      window.alert('Failed to save the new name — your browser storage may be full or unavailable. The rename will be lost on reload.')
+    }
   }
 
   const handleDeleteVersion = (id) => {
@@ -294,7 +301,12 @@ export default function App() {
     if (!window.confirm('Delete this version? This cannot be undone.')) return
     const next = versions.filter(v => v.id !== id)
     setVersions(next)
-    persistVersions(next)
+    // Same unchecked-persistVersions() gap as handleRenameVersion above — a
+    // failed write here means the "deleted" version reappears on reload,
+    // looking like the delete silently undid itself with no explanation.
+    if (!persistVersions(next)) {
+      window.alert('Failed to save after deleting — your browser storage may be full or unavailable. The deleted version may reappear on reload.')
+    }
     if (compareId === id) { setCompareId(null); setVersionDiff(null) }
   }
 

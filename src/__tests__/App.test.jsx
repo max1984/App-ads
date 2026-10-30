@@ -402,6 +402,61 @@ describe('App — version history', () => {
       expect(screen.queryByText('Version 1')).toBeFalsy()
     }
   )
+
+  it(
+    'alerts when renaming a version fails to persist, instead of pretending it stuck',
+    () => {
+      // Same "success state shown without checking the operation's result"
+      // bug class already guarded against for handleSaveVersion — renaming
+      // updates the in-memory list unconditionally, so without this check a
+      // failed write looked identical to a real one until the next reload
+      // silently reverted the label.
+      render(<App />)
+      fireEvent.click(screen.getByRole('button', { name: /Version history/ }))
+      typeInput('a.com, 1, DIRECT')
+      fireEvent.click(screen.getByRole('button', { name: /Save current as version/ }))
+      expect(screen.getByText('Version 1')).toBeTruthy()
+
+      vi.spyOn(window, 'prompt').mockReturnValue('Renamed')
+      // vi.spyOn reuses the same mock (with its accumulated call history) if
+      // window.alert is already spied from an earlier, unrestored test in
+      // this file — clear it so this assertion only counts this test's own
+      // call, not leftovers from a sibling test's alert.
+      const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {})
+      alertSpy.mockClear()
+      vi.spyOn(window.localStorage, 'setItem').mockImplementation(() => {
+        throw new Error('QuotaExceededError')
+      })
+      fireEvent.click(screen.getByRole('button', { name: 'Version 1' }))
+
+      expect(screen.getByText('Renamed')).toBeTruthy()
+      expect(alertSpy).toHaveBeenCalledTimes(1)
+    }
+  )
+
+  it(
+    'alerts when deleting a version fails to persist, instead of pretending it stuck',
+    () => {
+      render(<App />)
+      fireEvent.click(screen.getByRole('button', { name: /Version history/ }))
+      typeInput('a.com, 1, DIRECT')
+      fireEvent.click(screen.getByRole('button', { name: /Save current as version/ }))
+      expect(screen.getByText('Version 1')).toBeTruthy()
+
+      vi.spyOn(window, 'confirm').mockReturnValue(true)
+      // See the rename test above: window.alert's spy is reused across tests
+      // in this file without restoring, so clear it before asserting.
+      const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {})
+      alertSpy.mockClear()
+      vi.spyOn(window.localStorage, 'setItem').mockImplementation(() => {
+        throw new Error('QuotaExceededError')
+      })
+      fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+
+      expect(screen.queryByText('Version 1')).toBeFalsy()
+      expect(alertSpy).toHaveBeenCalledTimes(1)
+    }
+  )
 })
 
 describe('App — gutter', () => {
