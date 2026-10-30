@@ -303,6 +303,29 @@ describe('validateAdsTxt — MANAGERDOMAIN country code', () => {
     const r = validateAdsTxt('OWNERDOMAIN=a.com\nMANAGERDOMAIN=manager.com\nfoo.com, 1, DIRECT')
     expect(r.stats.errors).toBe(0)
   })
+
+  it('warns on two conflicting global MANAGERDOMAIN declarations', () => {
+    const r = validateAdsTxt('OWNERDOMAIN=a.com\nMANAGERDOMAIN=one.com\nMANAGERDOMAIN=two.com\nfoo.com, 1, DIRECT')
+    expect(r.issues.some(i => /Multiple global MANAGERDOMAIN/.test(i.message))).toBe(true)
+  })
+
+  it('warns on two conflicting MANAGERDOMAIN declarations for the same country', () => {
+    const r = validateAdsTxt(
+      'OWNERDOMAIN=a.com\nMANAGERDOMAIN=one.com,US\nMANAGERDOMAIN=two.com,US\nfoo.com, 1, DIRECT')
+    expect(r.issues.some(i => /Multiple MANAGERDOMAIN declarations for country 'US'/.test(i.message))).toBe(true)
+  })
+
+  it('does not warn for MANAGERDOMAIN declarations covering different countries', () => {
+    const r = validateAdsTxt(
+      'OWNERDOMAIN=a.com\nMANAGERDOMAIN=global.com\nMANAGERDOMAIN=us.com,US\nMANAGERDOMAIN=de.com,DE\nfoo.com, 1, DIRECT')
+    expect(r.issues.some(i => /Multiple.*MANAGERDOMAIN/.test(i.message))).toBe(false)
+  })
+
+  it('does not warn when the same MANAGERDOMAIN,country is repeated identically', () => {
+    const r = validateAdsTxt(
+      'OWNERDOMAIN=a.com\nMANAGERDOMAIN=manager.com,US\nMANAGERDOMAIN=manager.com,US\nfoo.com, 1, DIRECT')
+    expect(r.issues.some(i => /Multiple.*MANAGERDOMAIN/.test(i.message))).toBe(false)
+  })
 })
 
 describe('validateAdsTxt — DOMAIN_TO_CERT / VALID_CA_IDS drift tolerance', () => {

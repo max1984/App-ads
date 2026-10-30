@@ -353,6 +353,11 @@ export function validateAdsTxt(content) {
   const seenRecords = new Set()
   const seenDomains = new Set()
   const seenVariableLines = new Set()
+  // Per-country MANAGERDOMAIN tracking ('' = global/no-country) — spec allows
+  // at most one MANAGERDOMAIN per country plus at most one global entry,
+  // unlike OWNERDOMAIN's single flat value, which already warns on a second,
+  // conflicting declaration below.
+  const seenManagerDomains = new Map()
   const records = []
   const changes = []   // before → after for every transformed line
   const variables = {}
@@ -449,6 +454,27 @@ export function validateAdsTxt(content) {
             original: stripped,
             suggestion: `Use a bare domain such as 'example.com' — no scheme, path, spaces, or port.`
           })
+        } else if (varName === 'MANAGERDOMAIN') {
+          // Same "conflicting second declaration" check OWNERDOMAIN already has above,
+          // just keyed per country — a second MANAGERDOMAIN for the SAME country (or a
+          // second global one, countryKey '') with a DIFFERENT domain is a spec
+          // violation that silently went unflagged; different countries legitimately
+          // each get their own line and must stay unaffected by this check.
+          const countryKey = countryPart !== undefined ? countryPart.trim().toUpperCase() : ''
+          const prevDomain = seenManagerDomains.get(countryKey)
+          if (prevDomain !== undefined && prevDomain !== domainOnly) {
+            pushIssue({
+              severity: 'warning', lineNumber,
+              message: countryKey
+                ? `Multiple MANAGERDOMAIN declarations for country '${countryKey}' — only one is allowed per spec.`
+                : `Multiple global MANAGERDOMAIN declarations (without a country) — only one is allowed per spec.`,
+              original: stripped,
+              suggestion: countryKey
+                ? `Remove this line and keep only one MANAGERDOMAIN=...,${countryKey} declaration.`
+                : `Remove this line and keep only one global MANAGERDOMAIN declaration (without a country).`
+            })
+          }
+          seenManagerDomains.set(countryKey, domainOnly)
         }
       }
 
