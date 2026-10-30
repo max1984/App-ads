@@ -20,7 +20,20 @@ beforeEach(() => {
     clear: () => store.clear(),
   })
 })
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.useRealTimers() })
+afterEach(() => {
+  cleanup()
+  vi.unstubAllGlobals()
+  vi.useRealTimers()
+  // Without this, vi.spyOn(window, 'alert'/'confirm'/'prompt') in one test
+  // reuses the SAME mock (and its accumulated call history) the next time
+  // any later test spies on the same global, since spyOn on an
+  // already-spied method doesn't start a fresh mock. That silently
+  // inflated an unrelated later test's toHaveBeenCalledTimes() count by
+  // whatever an earlier test's spy had already recorded — caught once via
+  // a local alertSpy.mockClear() in two tests, but the root cause (no
+  // restore between tests) was still live for every other spy here.
+  vi.restoreAllMocks()
+})
 
 const typeInput = (text) =>
   fireEvent.change(screen.getByLabelText('app-ads.txt input'), { target: { value: text } })
@@ -418,12 +431,7 @@ describe('App — version history', () => {
       expect(screen.getByText('Version 1')).toBeTruthy()
 
       vi.spyOn(window, 'prompt').mockReturnValue('Renamed')
-      // vi.spyOn reuses the same mock (with its accumulated call history) if
-      // window.alert is already spied from an earlier, unrestored test in
-      // this file — clear it so this assertion only counts this test's own
-      // call, not leftovers from a sibling test's alert.
       const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {})
-      alertSpy.mockClear()
       vi.spyOn(window.localStorage, 'setItem').mockImplementation(() => {
         throw new Error('QuotaExceededError')
       })
@@ -444,10 +452,7 @@ describe('App — version history', () => {
       expect(screen.getByText('Version 1')).toBeTruthy()
 
       vi.spyOn(window, 'confirm').mockReturnValue(true)
-      // See the rename test above: window.alert's spy is reused across tests
-      // in this file without restoring, so clear it before asserting.
       const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {})
-      alertSpy.mockClear()
       vi.spyOn(window.localStorage, 'setItem').mockImplementation(() => {
         throw new Error('QuotaExceededError')
       })
