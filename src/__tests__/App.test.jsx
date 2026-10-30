@@ -443,6 +443,27 @@ describe('App — version history', () => {
   )
 
   it(
+    'shows a summary pill for a variable-only change, not just the unchanged count — ' +
+      'VersionDiffView\'s summary line only had pills for added/removed/cert-changed RECORDS, ' +
+      'so a version differing only by a variable (e.g. OWNERDOMAIN) still triggered the expanded ' +
+      'diff view (its variable change is listed below the fold) but the summary line itself showed ' +
+      'nothing but "N unchanged", with no indication anything had changed at a glance',
+    () => {
+      render(<App />)
+      fireEvent.click(screen.getByRole('button', { name: /Version history/ }))
+      typeInput('OWNERDOMAIN=a.com\nx.com, 1, DIRECT')
+      fireEvent.click(screen.getByRole('button', { name: /Save current as version/ }))
+      expect(screen.getByText('Version 1')).toBeTruthy()
+
+      typeInput('OWNERDOMAIN=b.com\nx.com, 1, DIRECT')
+      fireEvent.click(screen.getByRole('button', { name: 'Compare to current' }))
+
+      expect(screen.queryByText(/No differences/)).toBeFalsy()
+      expect(screen.getByText('1 vars changed')).toBeTruthy()
+    }
+  )
+
+  it(
     'alerts when deleting a version fails to persist, instead of pretending it stuck',
     () => {
       render(<App />)

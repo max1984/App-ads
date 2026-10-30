@@ -1232,6 +1232,15 @@ function VersionDiffView({ diff }) {
         {added.length > 0 && <span className="diff-pill pill-filled">+{added.length} added</span>}
         {removed.length > 0 && <span className="diff-pill pill-dupe">−{removed.length} removed</span>}
         {certChanged.length > 0 && <span className="diff-pill pill-corrected">{certChanged.length} cert changed</span>}
+        {/* A version that only changed a variable (e.g. OWNERDOMAIN) — no record
+            added/removed/cert-changed — triggered hasChanges above (so this expanded
+            view shows instead of "No differences"), but until now had no pill here
+            at all: the summary line showed just "N unchanged" with nothing to
+            indicate a change happened, even though the variable diff below the fold
+            does list it. */}
+        {variablesAdded.length > 0 && <span className="diff-pill pill-filled">+{variablesAdded.length} vars added</span>}
+        {variablesRemoved.length > 0 && <span className="diff-pill pill-dupe">−{variablesRemoved.length} vars removed</span>}
+        {variablesChanged.length > 0 && <span className="diff-pill pill-corrected">{variablesChanged.length} vars changed</span>}
         <span className="version-diff-unchanged">{unchanged} unchanged</span>
       </div>
       <div className="version-diff-list">
