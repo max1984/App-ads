@@ -92,6 +92,12 @@ export default function App() {
   const [compareId, setCompareId] = useState(null)
   const [versionDiff, setVersionDiff] = useState(null)
   const [savedFlash, setSavedFlash] = useState(null)  // null | 'saved' | 'failed'
+  // Counter, not a boolean: handleImportVersions sets this from inside a
+  // setVersions() updater (see there for why), so the alert itself lives in
+  // an effect reacting to the committed value instead of right after that
+  // call — a boolean wouldn't re-fire this effect on a second import in a
+  // row that fails the exact same way (no apparent *change* in value).
+  const [importSaveFailures, setImportSaveFailures] = useState(0)
   const [darkMode, setDarkMode] = useState(() => {
     const stored = loadStoredDarkMode()
     return stored !== null ? stored : window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false
@@ -143,6 +149,14 @@ export default function App() {
     // UX-05 FIX: auto-expand diff when there are changes
     if (result?.changes.length > 0) setShowDiff(true)
   }, [result])
+
+  // See handleImportVersions below for why this alert lives here instead of
+  // right after the setVersions() call that detects the failure.
+  useEffect(() => {
+    if (importSaveFailures > 0) {
+      window.alert('Failed to save the imported history — your browser storage may be full or unavailable. The import will be lost on reload.')
+    }
+  }, [importSaveFailures])
 
   const runValidation = useCallback((text) => {
     clearTimeout(validateTimerRef.current)
@@ -340,7 +354,19 @@ export default function App() {
         // the current list — same race class as handleBatchCheck's batchGenRef guards against.
         setVersions(prev => {
           const { versions: merged } = mergeImportedVersions(prev, imported, MAX_VERSIONS)
-          persistVersions(merged)
+          // Same unchecked-persistVersions() gap as handleRenameVersion/
+          // handleDeleteVersion above — this is the fourth sibling call and
+          // was the one actually missed: a failed write here means the
+          // imported versions look merged in (they're in `merged`, now in
+          // React state) but vanish again on the next reload with no
+          // indication the import didn't really stick. The alert can't live
+          // right here, synchronously after this call returns — this
+          // updater runs whenever React gets around to it (it's queued from
+          // FileReader.onload, outside any React event handler), not
+          // necessarily before the very next line of this function — so the
+          // failure is surfaced through its own state instead, picked up by
+          // the effect below once React actually commits it.
+          if (!persistVersions(merged)) setImportSaveFailures(n => n + 1)
           return merged
         })
       } catch { /* not a version history file, or malformed JSON — ignore */ }

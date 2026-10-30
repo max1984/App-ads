@@ -464,6 +464,32 @@ describe('App — version history', () => {
   )
 
   it(
+    'alerts when importing a history file fails to persist, instead of pretending it stuck',
+    async () => {
+      // Same unchecked-persistVersions() gap as handleRenameVersion/
+      // handleDeleteVersion above, but on the fourth sibling call site —
+      // the imported versions landed in React state (so they render) even
+      // though the write that was supposed to make them stick failed, with
+      // no indication the import wouldn't survive a reload.
+      render(<App />)
+      fireEvent.click(screen.getByRole('button', { name: /Version history/ }))
+
+      const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {})
+      vi.spyOn(window.localStorage, 'setItem').mockImplementation(() => {
+        throw new Error('QuotaExceededError')
+      })
+
+      const jsonInput = document.querySelector('input[type="file"][accept*="json"]')
+      const imported = [{ id: 'imported-1', label: 'Imported', timestamp: 1000, content: 'b.com, 2, DIRECT', stats: null }]
+      const file = new File([JSON.stringify(imported)], 'app-ads-versions.json', { type: 'application/json' })
+      fireEvent.change(jsonInput, { target: { files: [file] } })
+
+      await waitFor(() => expect(screen.getByText('Imported')).toBeTruthy())
+      expect(alertSpy).toHaveBeenCalledTimes(1)
+    }
+  )
+
+  it(
     'alerts when deleting a version fails to persist, instead of pretending it stuck',
     () => {
       render(<App />)
