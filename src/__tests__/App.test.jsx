@@ -398,6 +398,45 @@ describe('App — share links', () => {
   })
 })
 
+describe('App — error messages are announced to screen readers', () => {
+  afterEach(() => {
+    window.history.replaceState(null, '', window.location.pathname)
+  })
+
+  it('gives the share-link error an alert role instead of a silent visual-only message', () => {
+    // Sighted users see the red text appear; without role="alert" a screen
+    // reader gives no indication anything happened unless it happens to be
+    // focused on this exact paragraph already — the same "operation fails
+    // without telling the user" bug class already fixed for the sighted
+    // case here, just for assistive tech instead.
+    window.location.hash = '#not-valid-base64-!!!'
+    render(<App />)
+    expect(screen.getByRole('alert').textContent).toMatch(/Could not open this share link/)
+  })
+
+  it('gives the URL-load error an alert role', async () => {
+    urlModule.fetchFromUrl.mockRejectedValue(new Error('network error'))
+    render(<App />)
+    fireEvent.change(screen.getByPlaceholderText(/example\.com/), { target: { value: 'example.com' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Load' }))
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toMatch(/Failed to load/))
+  })
+
+  it('gives the file-read error an alert role', async () => {
+    const originalReadAsText = FileReader.prototype.readAsText
+    FileReader.prototype.readAsText = function () { this.onerror?.() }
+    try {
+      render(<App />)
+      const file = new File(['irrelevant'], 'broken.txt', { type: 'text/plain' })
+      const fileInput = document.querySelector('input[type="file"][accept=".txt,text/plain"]')
+      fireEvent.change(fileInput, { target: { files: [file] } })
+      await waitFor(() => expect(screen.getByRole('alert').textContent).toMatch(/Failed to read broken\.txt/))
+    } finally {
+      FileReader.prototype.readAsText = originalReadAsText
+    }
+  })
+})
+
 describe('App — version history', () => {
   it(
     'does not lose a version saved while a history import is still reading the file — ' +

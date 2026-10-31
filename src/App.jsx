@@ -573,7 +573,7 @@ export default function App() {
       <main className="main">
 
         {shareError && (
-          <p className="file-error">Could not open this share link — it looks corrupted or truncated.</p>
+          <p className="file-error" role="alert">Could not open this share link — it looks corrupted or truncated.</p>
         )}
 
         {/* URL loader */}
@@ -614,7 +614,7 @@ export default function App() {
           <span className="batch-toggle-hint">Save snapshots as you edit, then compare or restore any earlier version</span>
         </div>
 
-        {urlError && <p className="url-error">{urlError}</p>}
+        {urlError && <p className="url-error" role="alert">{urlError}</p>}
         {loadedUrl && !urlError && (
           <p className="loaded-url">
             <span className="loaded-url-label">Loaded from:</span>
@@ -758,7 +758,7 @@ export default function App() {
               </div>
             </div>
 
-            {fileError && <p className="file-error">{fileError}</p>}
+            {fileError && <p className="file-error" role="alert">{fileError}</p>}
 
             <GutterEditor
               ref={inputEditorRef}
