@@ -151,6 +151,35 @@ describe('compareSnapshots', () => {
     expect(d.removed).toHaveLength(0)
     expect(d.unchanged).toBe(2)
   })
+
+  it(
+    'detects a change to one of several per-country MANAGERDOMAIN lines, not just the last-parsed one',
+    () => {
+      // variables.MANAGERDOMAIN (flat, last-wins) is identical before/after here —
+      // both end with the unchanged DE line — so a diff based on that alone would
+      // report no MANAGERDOMAIN change at all, even though the US line changed.
+      const before = 'MANAGERDOMAIN=us1.com,US\nMANAGERDOMAIN=de.com,DE\nfoo.com, 1, DIRECT'
+      const after = 'MANAGERDOMAIN=us2.com,US\nMANAGERDOMAIN=de.com,DE\nfoo.com, 1, DIRECT'
+      const d = compareSnapshots(before, after)
+      expect(d.variablesChanged).toEqual([
+        { name: 'MANAGERDOMAIN (US)', before: 'us1.com', after: 'us2.com' },
+      ])
+    }
+  )
+
+  it('reports an added/removed per-country MANAGERDOMAIN line distinctly from a changed one', () => {
+    const before = 'MANAGERDOMAIN=global.com\nMANAGERDOMAIN=us.com,US\nfoo.com, 1, DIRECT'
+    const after = 'MANAGERDOMAIN=de.com,DE\nfoo.com, 1, DIRECT'
+    const d = compareSnapshots(before, after)
+    expect(d.variablesRemoved).toEqual(
+      expect.arrayContaining([
+        { name: 'MANAGERDOMAIN (global)', value: 'global.com' },
+        { name: 'MANAGERDOMAIN (US)', value: 'us.com' },
+      ])
+    )
+    expect(d.variablesAdded).toEqual([{ name: 'MANAGERDOMAIN (DE)', value: 'de.com' }])
+    expect(d.variablesChanged).toHaveLength(0)
+  })
 })
 
 describe('formatRecordLine', () => {

@@ -722,6 +722,12 @@ export function validateAdsTxt(content) {
     records,
     changes,
     variables,
+    // Spec allows MANAGERDOMAIN to appear once per country plus once globally (see
+    // seenManagerDomains above) — `variables.MANAGERDOMAIN` only keeps whichever line was
+    // parsed LAST, silently discarding every other country's value. compareSnapshots needs
+    // the full per-country picture to diff MANAGERDOMAIN correctly instead of comparing that
+    // single last-wins string.
+    managerDomainsByCountry: Object.fromEntries(seenManagerDomains),
     stats: {
       totalRecords,
       keptRecords,
@@ -760,11 +766,31 @@ export function compareSnapshots(oldContent, newContent) {
     if (!newMap.has(key)) removed.push(r)
   }
 
+  // MANAGERDOMAIN is excluded here and diffed separately below — oldResult.variables.
+  // MANAGERDOMAIN/newResult.variables.MANAGERDOMAIN only hold whichever line was parsed
+  // LAST (see validateAdsTxt), so a file with both a global and per-country MANAGERDOMAIN
+  // lines would compare only the last one here, silently missing a real edit to any
+  // other country's line (or reporting a change that didn't actually happen, if the
+  // last-parsed line is unrelated to the one that changed).
   const varNames = new Set([...Object.keys(oldResult.variables), ...Object.keys(newResult.variables)])
+  varNames.delete('MANAGERDOMAIN')
   const variablesAdded = [], variablesRemoved = [], variablesChanged = []
   for (const name of varNames) {
     const before = oldResult.variables[name]
     const after = newResult.variables[name]
+    if (before === undefined && after !== undefined) variablesAdded.push({ name, value: after })
+    else if (before !== undefined && after === undefined) variablesRemoved.push({ name, value: before })
+    else if (before !== after) variablesChanged.push({ name, before, after })
+  }
+
+  const countryKeys = new Set([
+    ...Object.keys(oldResult.managerDomainsByCountry),
+    ...Object.keys(newResult.managerDomainsByCountry),
+  ])
+  for (const countryKey of countryKeys) {
+    const before = oldResult.managerDomainsByCountry[countryKey]
+    const after = newResult.managerDomainsByCountry[countryKey]
+    const name = countryKey ? `MANAGERDOMAIN (${countryKey})` : 'MANAGERDOMAIN (global)'
     if (before === undefined && after !== undefined) variablesAdded.push({ name, value: after })
     else if (before !== undefined && after === undefined) variablesRemoved.push({ name, value: before })
     else if (before !== after) variablesChanged.push({ name, before, after })
