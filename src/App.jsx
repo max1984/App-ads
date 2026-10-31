@@ -1329,7 +1329,19 @@ function VersionRow({ version, isComparing, onRestore, onCompare, onRename, onDe
         )}
       </div>
       <div className="version-actions">
-        <button className={`btn btn-ghost btn-xs${isComparing ? ' btn-active' : ''}`} onClick={onCompare}>
+        {/* aria-pressed matters here even though the label text already changes
+            ("Compare to current" -> "✓ Comparing") — unlike aria-expanded (used
+            for the Batch/Version History disclosure buttons above), a plain label
+            swap on a non-toggle button gives assistive tech no indication this is
+            a two-state control at all, only that its text happened to change.
+            Every other toggle button in this app's sibling projects (rozkroj's
+            UnitToggle/LanguageSwitcher, cwaniak's lang buttons) already exposes
+            its state this way. */}
+        <button
+          className={`btn btn-ghost btn-xs${isComparing ? ' btn-active' : ''}`}
+          onClick={onCompare}
+          aria-pressed={isComparing}
+        >
           {isComparing ? '✓ Comparing' : 'Compare to current'}
         </button>
         <button className="btn btn-ghost btn-xs" onClick={onRestore}>Restore</button>

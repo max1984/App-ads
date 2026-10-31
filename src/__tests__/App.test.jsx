@@ -586,6 +586,26 @@ describe('App — version history', () => {
   )
 
   it(
+    'marks the Compare button as pressed for assistive tech while a comparison is open, not just via its changed label',
+    () => {
+      render(<App />)
+      fireEvent.click(screen.getByRole('button', { name: /Version history/ }))
+      typeInput('x.com, 1, DIRECT')
+      fireEvent.click(screen.getByRole('button', { name: /Save current as version/ }))
+
+      const compareBtn = screen.getByRole('button', { name: 'Compare to current' })
+      expect(compareBtn.getAttribute('aria-pressed')).toBe('false')
+
+      fireEvent.click(compareBtn)
+      const comparingBtn = screen.getByRole('button', { name: /Comparing/ })
+      expect(comparingBtn.getAttribute('aria-pressed')).toBe('true')
+
+      fireEvent.click(comparingBtn)
+      expect(screen.getByRole('button', { name: 'Compare to current' }).getAttribute('aria-pressed')).toBe('false')
+    }
+  )
+
+  it(
     'alerts when importing a history file fails to persist, instead of pretending it stuck',
     async () => {
       // Same unchecked-persistVersions() gap as handleRenameVersion/
