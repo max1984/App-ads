@@ -579,6 +579,20 @@ describe('App — version history', () => {
   )
 
   it(
+    'regression: the Save/Import buttons must announce their result flash to screen readers ' +
+      '— every other transient status in this app (Share, Copy output, Copy network template, ' +
+      'Copy URL) already has aria-live="polite" on the button whose own text flips to "✓ ..."/' +
+      '"⚠ ...", but these two were missed, so a screen reader user got no announcement at all ' +
+      'of whether "Save current as version"/"Import history" actually worked',
+    () => {
+      render(<App />)
+      fireEvent.click(screen.getByRole('button', { name: /Version history/ }))
+      expect(screen.getByRole('button', { name: /Save current as version/ }).getAttribute('aria-live')).toBe('polite')
+      expect(screen.getByRole('button', { name: /Import history/ }).getAttribute('aria-live')).toBe('polite')
+    }
+  )
+
+  it(
     'asks for confirmation before deleting a saved version, and keeps it when the user declines',
     () => {
       render(<App />)

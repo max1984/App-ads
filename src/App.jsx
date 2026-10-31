@@ -733,7 +733,10 @@ export default function App() {
               <p className="batch-hint">Snapshots are saved locally in this browser — nothing leaves your machine.</p>
             </div>
             <div className="batch-actions">
-              <button className="btn btn-primary" onClick={handleSaveVersion} disabled={!input.trim() || versions[0]?.content === input}>
+              {/* aria-live mirrors the Share/Copy-output/Copy-network buttons elsewhere in
+                  this file — without it, a screen reader user gets no announcement at all
+                  of whether the save actually worked ("✓ Saved!" vs "⚠ Save failed"). */}
+              <button className="btn btn-primary" onClick={handleSaveVersion} disabled={!input.trim() || versions[0]?.content === input} aria-live="polite">
                 {savedFlash === 'saved' ? '✓ Saved!' : savedFlash === 'failed' ? '⚠ Save failed (storage full?)' : 'Save current as version'}
               </button>
               {versions.length > 0 && (
@@ -744,8 +747,9 @@ export default function App() {
                   browser/profile that doesn't have any yet (new machine, cleared storage, a
                   history file handed over by someone else). Gating it the same way as Export
                   made that impossible: with zero local versions, this button simply didn't
-                  exist, and the empty-state message below didn't mention it as an option either. */}
-              <button className="btn btn-ghost" onClick={() => versionFileInputRef.current.click()}>
+                  exist, and the empty-state message below didn't mention it as an option either.
+                  aria-live same reasoning as Save current as version above. */}
+              <button className="btn btn-ghost" onClick={() => versionFileInputRef.current.click()} aria-live="polite">
                 {importFlash === 'invalid'
                   ? '⚠ Not a valid history file'
                   : importFlash
