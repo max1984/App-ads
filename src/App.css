@@ -220,6 +220,14 @@
   white-space: pre;
 }
 
+/* `outline: none` above dropped the native focus ring with nothing to
+   replace it — unlike .url-input (which at least gets a border-color
+   change on :focus), this textarea is the app's main input/output editor
+   and had ZERO visible indication of keyboard focus at all. inset (not a
+   regular outset) box-shadow so it isn't clipped by .gutter-wrap's
+   `overflow: hidden`. */
+.editor:focus { box-shadow: inset 0 0 0 2px var(--primary); }
+
 .editor::placeholder { color: var(--text-muted); opacity: 0.6; }
 
 .editor-drag    { background: var(--bg); background: color-mix(in srgb, var(--primary) 8%, transparent); }
@@ -597,6 +605,11 @@
   width: 100%;
   min-height: 90px;
 }
+
+/* Same gap as .editor above — `outline: none` with no replacement at all,
+   on another textarea. Inset for the same .batch-panel `overflow: hidden`
+   clipping reason. */
+.batch-textarea:focus { box-shadow: inset 0 0 0 2px var(--primary); }
 
 .batch-actions {
   display: flex;
