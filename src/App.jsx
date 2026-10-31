@@ -620,6 +620,12 @@ export default function App() {
             className="url-input"
             type="url"
             placeholder="example.com or https://example.com/app-ads.txt  (Enter to load)"
+            // Every other text input/textarea in this file (the main editor, the
+            // cleaned-output editor, the batch-URLs textarea) has an accessible
+            // name via `ariaLabel`/`aria-label` — this one relied solely on its
+            // placeholder, which disappears once typing starts and isn't a
+            // reliable accessible-name source for screen readers.
+            aria-label="Domain or app-ads.txt URL to load"
             value={urlValue}
             onChange={e => { setUrlValue(e.target.value); setUrlError('') }}
             onKeyDown={e => e.key === 'Enter' && handleLoadUrl()}

@@ -240,6 +240,18 @@ describe('App — accessibility', () => {
     }
   )
 
+  it(
+    'regression: the URL loader input has an accessible name of its own, not just a ' +
+      'placeholder — every other text input/textarea in this app (the main editor, the ' +
+      'cleaned-output editor, the batch-URLs textarea) has an aria-label, but this one relied ' +
+      "solely on placeholder text, which disappears once typing starts and isn't a reliable " +
+      'accessible-name source for screen readers',
+    () => {
+      render(<App />)
+      expect(screen.getByRole('textbox', { name: /app-ads\.txt URL/i })).toBeTruthy()
+    }
+  )
+
   it('renders a missing network coverage item as a real button, not a bare clickable div', () => {
     render(<App />)
     typeInput('google.com, pub-1, DIRECT')
