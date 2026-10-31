@@ -884,12 +884,20 @@ export default function App() {
             {result && (
               <div className="panel-footer stats-row">
                 {health && (
+                  // aria-label spells out what the bare "A"/"92" visual text can't:
+                  // a title tooltip isn't reliably announced by screen readers and
+                  // isn't reachable at all without a mouse (touch, keyboard-only),
+                  // unlike every other stat/pill in this row, which is self-describing
+                  // in its own visible text (e.g. "42 records", "3 errors"). The two
+                  // inner spans are hidden from the accessibility tree so this label
+                  // isn't read twice.
                   <span
                     className={`health-badge health-${health.grade.toLowerCase()}`}
                     title="File quality score: −10 per error, −3 per warning, −2 per duplicate"
+                    aria-label={`File quality score: grade ${health.grade}, ${health.score} out of 100`}
                   >
-                    <span className="health-grade">{health.grade}</span>
-                    <span className="health-score">{health.score}</span>
+                    <span className="health-grade" aria-hidden="true">{health.grade}</span>
+                    <span className="health-score" aria-hidden="true">{health.score}</span>
                   </span>
                 )}
                 <span className="stat"><strong>{result.stats.keptRecords}</strong> records</span>

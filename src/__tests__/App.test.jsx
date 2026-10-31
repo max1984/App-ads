@@ -51,6 +51,10 @@ describe('App', () => {
     expect(screen.getByLabelText('Cleaned output').value)
       .toBe('OWNERDOMAIN=example.com\ngoogle.com, pub-1, DIRECT, f08c47fec0942fa0')
     expect(screen.getByTitle(/File quality score/).textContent).toBe('A100')
+    // The title tooltip above isn't reliably read by screen readers and isn't
+    // reachable at all without a mouse — aria-label is what actually makes the
+    // bare "A100" visual text accessible.
+    expect(screen.getByLabelText('File quality score: grade A, 100 out of 100')).toBeTruthy()
   })
 
   it(
