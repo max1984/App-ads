@@ -860,6 +860,33 @@ describe('App — batch check', () => {
       await act(async () => { resolveFetch('google.com, pub-1, DIRECT') })
     }
   )
+
+  it(
+    'regression: a batch row\'s "Copy URL" button must announce "Copied!", not swap to a bare ' +
+      "checkmark with no word at all — every other copy-confirmation button in this file " +
+      '(Share, the main Copy button, the network-coverage template button, Save/Import) flips ' +
+      'its own visible text to something containing "Copied"/"Imported"/etc. so aria-live has a ' +
+      'word to announce, but this one only ever showed the bare "✓" glyph on success',
+    async () => {
+      document.execCommand = vi.fn(() => true)
+      urlModule.fetchFromUrl.mockResolvedValue('google.com, pub-1, DIRECT')
+
+      render(<App />)
+      fireEvent.click(screen.getByRole('button', { name: /Batch URL check/ }))
+      fireEvent.change(screen.getByLabelText('URLs to check, one per line'), {
+        target: { value: 'a.com' },
+      })
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Check all URLs' }))
+      })
+
+      const copyUrlBtn = screen.getByRole('button', { name: 'Copy URL' })
+      await act(async () => { fireEvent.click(copyUrlBtn) })
+
+      expect(copyUrlBtn.textContent).toContain('Copied')
+      expect(copyUrlBtn.textContent).not.toBe('✓')
+    }
+  )
 })
 
 describe('App — gutter', () => {

@@ -1243,8 +1243,15 @@ function BatchResultRow({ item, onLoad }) {
         <span className="batch-status-text">{item.error}</span>
         {/* UX-06 FIX: copy URL button */}
         {/* aria-live mirrors the Share/Copy-output buttons — otherwise this
-            '✓' swap is purely visual and a screen reader user hears nothing. */}
-        <button className="btn btn-ghost btn-xs" onClick={handleCopyUrl} aria-live="polite">{copiedUrl ? '✓' : 'Copy URL'}</button>
+            '✓' swap is purely visual and a screen reader user hears nothing.
+            The confirmation text itself was a bare '✓' glyph with no word at
+            all — every other copy-confirmation button in this file (Share,
+            Copy output, the network-coverage template button) swaps to text
+            containing "Copied"/"copied", so aria-live has a word to announce;
+            this one alone didn't, so a screen reader would say nothing more
+            useful than "check mark" (or nothing at all on glyphs some
+            screen readers don't have a name for). */}
+        <button className="btn btn-ghost btn-xs" onClick={handleCopyUrl} aria-live="polite">{copiedUrl ? '✓ Copied!' : 'Copy URL'}</button>
       </div>
     )
   }
@@ -1262,8 +1269,10 @@ function BatchResultRow({ item, onLoad }) {
         {stats.duplicatesRemoved > 0 && <span> · {stats.duplicatesRemoved} dupes</span>}
         {stats.certsAdded > 0 && <span> · {stats.certsAdded} certs added</span>}
       </span>
-      {/* UX-06 FIX: copy URL button on success rows too */}
-      <button className="btn btn-ghost btn-xs" onClick={handleCopyUrl} aria-live="polite">{copiedUrl ? '✓' : 'Copy URL'}</button>
+      {/* UX-06 FIX: copy URL button on success rows too (see the error-row
+          twin above for why the confirmation text needs the word "Copied",
+          not just a bare '✓') */}
+      <button className="btn btn-ghost btn-xs" onClick={handleCopyUrl} aria-live="polite">{copiedUrl ? '✓ Copied!' : 'Copy URL'}</button>
       <button className="btn btn-ghost btn-xs batch-load-btn" onClick={onLoad}>Load</button>
     </div>
   )
