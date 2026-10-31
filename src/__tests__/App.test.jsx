@@ -200,6 +200,19 @@ describe('App — accessibility', () => {
     expect(batch.getAttribute('aria-expanded')).toBe('true')
   })
 
+  it(
+    'announces "Copied!" feedback to screen readers on the Copy-output and ' +
+      'missing-network-template buttons, matching the Share button\'s existing aria-live',
+    () => {
+      render(<App />)
+      typeInput('google.com, pub-1, DIRECT')
+      fireEvent.click(screen.getByRole('button', { name: /Validate/ }))
+      expect(screen.getByRole('button', { name: 'Copy' }).getAttribute('aria-live')).toBe('polite')
+      fireEvent.click(screen.getByRole('button', { name: /Network Coverage/ }))
+      expect(screen.getByTitle(/AppNexus/).getAttribute('aria-live')).toBe('polite')
+    }
+  )
+
   it('renders a missing network coverage item as a real button, not a bare clickable div', () => {
     render(<App />)
     typeInput('google.com, pub-1, DIRECT')

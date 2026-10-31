@@ -856,7 +856,10 @@ export default function App() {
                 </label>
               </div>
               <div className="panel-actions">
-                <button className={`btn btn-ghost${copiedOutput ? ' btn-success' : ''}`} onClick={handleCopyOutput} disabled={!result}>
+                {/* aria-live mirrors the Share button above — this "✓ Copied!" text
+                    swap is otherwise purely visual, so a screen reader user clicking
+                    Copy never hears that the output was actually copied. */}
+                <button className={`btn btn-ghost${copiedOutput ? ' btn-success' : ''}`} onClick={handleCopyOutput} disabled={!result} aria-live="polite">
                   {copiedOutput ? '✓ Copied!' : 'Copy'}
                 </button>
                 <button className="btn btn-ghost" onClick={handleDownload} disabled={!result}>Download .txt</button>
@@ -1031,6 +1034,7 @@ export default function App() {
                         className="coverage-item missing"
                         onClick={() => handleCopyNetworkTemplate(n)}
                         title={`Click to copy template line for ${n.name}`}
+                        aria-live="polite"
                       >
                         {content}
                       </button>
@@ -1191,7 +1195,9 @@ function BatchResultRow({ item, onLoad }) {
         <span className="batch-url" title={item.url}>{item.url}</span>
         <span className="batch-status-text">{item.error}</span>
         {/* UX-06 FIX: copy URL button */}
-        <button className="btn btn-ghost btn-xs" onClick={handleCopyUrl}>{copiedUrl ? '✓' : 'Copy URL'}</button>
+        {/* aria-live mirrors the Share/Copy-output buttons — otherwise this
+            '✓' swap is purely visual and a screen reader user hears nothing. */}
+        <button className="btn btn-ghost btn-xs" onClick={handleCopyUrl} aria-live="polite">{copiedUrl ? '✓' : 'Copy URL'}</button>
       </div>
     )
   }
@@ -1210,7 +1216,7 @@ function BatchResultRow({ item, onLoad }) {
         {stats.certsAdded > 0 && <span> · {stats.certsAdded} certs added</span>}
       </span>
       {/* UX-06 FIX: copy URL button on success rows too */}
-      <button className="btn btn-ghost btn-xs" onClick={handleCopyUrl}>{copiedUrl ? '✓' : 'Copy URL'}</button>
+      <button className="btn btn-ghost btn-xs" onClick={handleCopyUrl} aria-live="polite">{copiedUrl ? '✓' : 'Copy URL'}</button>
       <button className="btn btn-ghost btn-xs batch-load-btn" onClick={onLoad}>Load</button>
     </div>
   )
