@@ -26,6 +26,17 @@ describe('normalizeAdsTxtUrl', () => {
   it('returns empty string for empty input', () => {
     expect(normalizeAdsTxtUrl('   ')).toBe('')
   })
+
+  it(
+    'strips a query string and hash fragment carried over from the pasted URL — they have no ' +
+      'meaning for a static file at the domain root and would otherwise ride into the actual ' +
+      'fetch (and into the "Loaded from:" breadcrumb) unchanged',
+    () => {
+      expect(normalizeAdsTxtUrl('https://example.com/page?utm_source=x&ref=y')).toBe('https://example.com/app-ads.txt')
+      expect(normalizeAdsTxtUrl('https://example.com/page#section')).toBe('https://example.com/app-ads.txt')
+      expect(normalizeAdsTxtUrl('example.com?foo=bar#frag')).toBe('https://example.com/app-ads.txt')
+    }
+  )
 })
 
 const response = (status, body = '') => ({ ok: status >= 200 && status < 300, status, text: async () => body })

@@ -19,6 +19,16 @@ export function normalizeAdsTxtUrl(input) {
   let url
   try { url = new URL(raw) } catch { return raw }
   url.pathname = '/app-ads.txt'
+  // Only the scheme+host+path identify the file per spec — a query string or
+  // hash pasted along with the rest of the URL (e.g. a Play Store listing or
+  // marketing link still carrying "?utm_source=…" or "#section") has no
+  // meaning for a static text file and would otherwise ride along into the
+  // actual fetch, which can change what some servers return (caching/WAF
+  // rules keyed on the query string) or just leave the "Loaded from:"
+  // breadcrumb showing leftover query noise that has nothing to do with the
+  // file.
+  url.search = ''
+  url.hash = ''
   return url.toString()
 }
 
