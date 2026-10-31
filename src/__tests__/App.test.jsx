@@ -321,6 +321,26 @@ describe('App — accessibility', () => {
       expect(issueTop.getAttribute('aria-expanded')).toBe('true')
     }
   )
+
+  it(
+    'regression: clicking "jump to line" selects that line\'s text in the editor, not just ' +
+      'scrolls to it — textarea.focus() alone restores whatever caret position the editor ' +
+      'already had, which is NOT the jumped-to line, leaving a keyboard/AT user visually on ' +
+      'the right line but editing the wrong one',
+    () => {
+      render(<App />)
+      typeInput('OWNERDOMAIN=a.com\nfoo.com, 1')
+      fireEvent.click(screen.getByRole('button', { name: /Validate/ }))
+      const jumpLink = screen.getByTitle('Jump to this line in the editor')
+      fireEvent.click(jumpLink)
+
+      const editor = screen.getByLabelText('app-ads.txt input')
+      // Line 1 "OWNERDOMAIN=a.com" is 17 chars + 1 for the newline = offset 18.
+      // Line 2 "foo.com, 1" is 10 chars, so the selection should span [18, 28).
+      expect(editor.selectionStart).toBe(18)
+      expect(editor.selectionEnd).toBe(28)
+    }
+  )
 })
 
 describe('App — dark mode', () => {

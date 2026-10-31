@@ -1120,9 +1120,20 @@ const GutterEditor = forwardRef(function GutterEditor({
       const target = Math.max(0, (lineNum - 1) * 22 - 120)
       textareaRef.current.scrollTop = target
       if (gutterRef.current) gutterRef.current.scrollTop = target
+      // .focus() alone restores whatever selection/caret the textarea already
+      // had (e.g. from the last edit) — it does NOT move it to this line. A
+      // keyboard/AT user who clicks "Jump to this line" then lands on the
+      // right line visually but their caret is still wherever it was before,
+      // so Home/End/arrow keys or immediate typing act on the WRONG line.
+      // Selecting the line's own text makes the jump actually land there.
+      const lines = value.split('\n')
+      let offset = 0
+      for (let i = 0; i < lineNum - 1 && i < lines.length; i++) offset += lines[i].length + 1
+      const lineLength = lines[lineNum - 1]?.length ?? 0
+      textareaRef.current.setSelectionRange(offset, offset + lineLength)
       textareaRef.current.focus()
     }
-  }), [])
+  }), [value])
 
   return (
     <div className="gutter-wrap">
