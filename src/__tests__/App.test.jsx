@@ -340,6 +340,32 @@ describe('App — URL loader', () => {
   })
 })
 
+describe('App — file loading', () => {
+  it(
+    'shows an error instead of silently doing nothing when reading the uploaded file fails',
+    async () => {
+      // loadFile()'s FileReader had no onerror — a failed read (permission
+      // error, file removed between picking it and the read completing) left
+      // onload never firing and nothing else reacting, so the "Upload file"
+      // button/drop zone looked like it silently did nothing.
+      const originalReadAsText = FileReader.prototype.readAsText
+      FileReader.prototype.readAsText = function () { this.onerror?.() }
+
+      try {
+        render(<App />)
+        const file = new File(['irrelevant'], 'broken.txt', { type: 'text/plain' })
+        const fileInput = document.querySelector('input[type="file"][accept=".txt,text/plain"]')
+
+        fireEvent.change(fileInput, { target: { files: [file] } })
+
+        expect(await screen.findByText(/Failed to read broken\.txt/)).toBeTruthy()
+      } finally {
+        FileReader.prototype.readAsText = originalReadAsText
+      }
+    }
+  )
+})
+
 describe('App — version history', () => {
   it(
     'does not lose a version saved while a history import is still reading the file — ' +

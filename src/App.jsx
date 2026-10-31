@@ -78,6 +78,7 @@ export default function App() {
   const [urlValue, setUrlValue] = useState('')
   const [urlLoading, setUrlLoading] = useState(false)
   const [urlError, setUrlError] = useState('')
+  const [fileError, setFileError] = useState('')
   const [loadedUrl, setLoadedUrl] = useState('')
   const [collapsedIssues, setCollapsedIssues] = useState(new Set())
   const [sortOutput, setSortOutput] = useState(false)
@@ -186,8 +187,19 @@ export default function App() {
 
   const loadFile = useCallback((file) => {
     if (!file) return
+    setFileError('')
     const reader = new FileReader()
     reader.onload = (e) => loadText(e.target.result)
+    // Without this, a failed read (permission error, the file being removed/
+    // unmounted between picking it and the read completing, a dropped item
+    // that looks like a file but isn't one FileReader can actually read) left
+    // onload never firing and nothing else reacting — the drop zone/"Upload
+    // file" button would look like it silently did nothing, exactly the
+    // "operation fails without telling the user" class already fixed
+    // elsewhere for handleLoadUrl's fetch failures (see urlError above).
+    reader.onerror = () => setFileError(
+      `Failed to read ${file.name}: ${reader.error?.message || 'unknown error'}.`
+    )
     reader.readAsText(file, 'utf-8')
   }, [loadText])
 
@@ -732,6 +744,8 @@ export default function App() {
                 <input ref={fileInputRef} type="file" accept=".txt,text/plain" hidden onChange={e => loadFile(e.target.files[0])} />
               </div>
             </div>
+
+            {fileError && <p className="file-error">{fileError}</p>}
 
             <GutterEditor
               ref={inputEditorRef}
