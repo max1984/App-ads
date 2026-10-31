@@ -953,7 +953,13 @@ export default function App() {
                   <button className="btn btn-ghost btn-xs" onClick={handleExpandAll}>Expand all</button>
                   <button className="btn btn-ghost btn-xs" onClick={handleCollapseAll}>Collapse all</button>
                 </div>
-                <div className="filter-tabs">
+                {/* role="group" + aria-pressed, same pattern as the Compare
+                    button's own aria-pressed fix: "active" here is a CSS
+                    class only a sighted user can see — without these, a
+                    screen reader user tabbing through "All"/"Errors"/
+                    "Warnings"/… hears five plain buttons with no indication
+                    of which filter is currently selected. */}
+                <div className="filter-tabs" role="group" aria-label="Filter issues by type">
                   {[
                     { key: 'all',       label: `All (${result.issues.length})` },
                     { key: 'error',     label: `Errors (${issueCount('error')})`,         show: issueCount('error') > 0 },
@@ -964,6 +970,7 @@ export default function App() {
                     <button
                       key={tab.key}
                       className={`filter-tab${issueFilter === tab.key ? ' active' : ''}`}
+                      aria-pressed={issueFilter === tab.key}
                       onClick={() => setIssueFilter(tab.key)}
                     >
                       {tab.label}

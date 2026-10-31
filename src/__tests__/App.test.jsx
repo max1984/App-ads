@@ -213,6 +213,29 @@ describe('App — accessibility', () => {
     }
   )
 
+  it(
+    'exposes the issue filter tabs as a labelled group with aria-pressed on the active one, ' +
+      'matching the Compare button\'s own aria-pressed fix — "active" there was a CSS class only, ' +
+      'with no indication to a screen reader of which filter (All/Errors/Warnings/…) is selected',
+    () => {
+      render(<App />)
+      typeInput('google.com, pub-1, DIRECT\nbad-line-with-no-commas')
+      fireEvent.click(screen.getByRole('button', { name: /Validate/ }))
+
+      const group = screen.getByRole('group', { name: 'Filter issues by type' })
+      const allTab = screen.getByRole('button', { name: /^All/ })
+      expect(group.contains(allTab)).toBe(true)
+      expect(allTab.getAttribute('aria-pressed')).toBe('true')
+
+      const errorTab = screen.getByRole('button', { name: /^Errors/ })
+      expect(errorTab.getAttribute('aria-pressed')).toBe('false')
+
+      fireEvent.click(errorTab)
+      expect(errorTab.getAttribute('aria-pressed')).toBe('true')
+      expect(allTab.getAttribute('aria-pressed')).toBe('false')
+    }
+  )
+
   it('renders a missing network coverage item as a real button, not a bare clickable div', () => {
     render(<App />)
     typeInput('google.com, pub-1, DIRECT')
