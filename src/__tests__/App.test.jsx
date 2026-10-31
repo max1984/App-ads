@@ -364,6 +364,31 @@ describe('App — file loading', () => {
       }
     }
   )
+
+  it(
+    'clears the stale file-read error when Clear is clicked, instead of leaving it on screen indefinitely',
+    async () => {
+      // Clear already resets input/result/loadedUrl/sortOutput (see its own
+      // "BUG-02 FIX" comment for sortOutput) — fileError, shown in the exact
+      // same panel right above the editor, was the one piece of this panel's
+      // own state it left behind, outliving the very upload it was about.
+      const originalReadAsText = FileReader.prototype.readAsText
+      FileReader.prototype.readAsText = function () { this.onerror?.() }
+      try {
+        render(<App />)
+        const file = new File(['irrelevant'], 'broken.txt', { type: 'text/plain' })
+        const fileInput = document.querySelector('input[type="file"][accept=".txt,text/plain"]')
+        fireEvent.change(fileInput, { target: { files: [file] } })
+        await screen.findByText(/Failed to read broken\.txt/)
+
+        fireEvent.click(screen.getByRole('button', { name: 'Clear' }))
+
+        expect(screen.queryByText(/Failed to read broken\.txt/)).toBeNull()
+      } finally {
+        FileReader.prototype.readAsText = originalReadAsText
+      }
+    }
+  )
 })
 
 describe('App — share links', () => {

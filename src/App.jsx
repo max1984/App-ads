@@ -799,6 +799,13 @@ export default function App() {
                   clearTimeout(validateTimerRef.current)
                   setInput(''); setResult(null); setLoadedUrl('')
                   setSortOutput(false)  // BUG-02 FIX: reset sort on clear
+                  // fileError (shown right above this same panel's editor) was
+                  // the one piece of this panel's own state Clear left behind —
+                  // a failed "Upload file" attempt kept its error message on
+                  // screen indefinitely after Clear, outliving the very input
+                  // it was about, until the next upload attempt happened to
+                  // replace it.
+                  setFileError('')
                 }}>
                   Clear
                 </button>
