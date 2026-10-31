@@ -57,6 +57,19 @@ describe('validateAdsTxt — records', () => {
     expect(err.suggestion).not.toMatch(/,\s*DIRECT/)
   })
 
+  it(
+    'regression: the relationship-guess suggestion must keep trailing extension data ' +
+      'and inline comments — App.jsx\'s handleApplyFix replaces the whole line verbatim ' +
+      'with this suggestion\'s "Change to: " text, so dropping them here silently deleted ' +
+      'that data when the user clicked "Apply fix" (the sibling cert-mismatch suggestion ' +
+      'a few lines below already keeps both)',
+    () => {
+      const r = validateAdsTxt(OWNER + 'foo.com, 1, indirect;ext=1 #a note')
+      const err = r.issues.find(i => i.severity === 'error')
+      expect(err.suggestion).toBe('Change to: foo.com, 1, RESELLER;ext=1 #a note')
+    }
+  )
+
   it('flags too few fields', () => {
     const r = validateAdsTxt(OWNER + 'foo.com, 1')
     expect(r.stats.errors).toBe(1)

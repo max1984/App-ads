@@ -602,8 +602,14 @@ export function validateAdsTxt(content) {
         severity: 'error', lineNumber,
         message: `Invalid relationship '${relationship}' — must be DIRECT or RESELLER.`,
         original: stripped,
+        // Must carry extensionData/inlineComment along, same as the cert-mismatch
+        // suggestion a few lines below — without them, clicking "Apply fix" in
+        // App.jsx's handleApplyFix (which replaces the whole line verbatim with
+        // this suggestion's "Change to: " text) silently deleted any extension
+        // data after a ';' or inline '#' comment that line had, instead of just
+        // fixing the relationship field.
         suggestion: guess
-          ? `Change to: ${domain}, ${publisherIdRaw}, ${guess}${certId ? ', ' + certId : ''}`
+          ? `Change to: ${domain}, ${publisherIdRaw}, ${guess}${certId ? ', ' + certId : ''}${extensionData}${inlineComment}`
           : `Replace '${parts[2]}' with either DIRECT or RESELLER.`
       })
     } else {
