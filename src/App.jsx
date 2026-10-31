@@ -79,6 +79,7 @@ export default function App() {
   const [urlLoading, setUrlLoading] = useState(false)
   const [urlError, setUrlError] = useState('')
   const [fileError, setFileError] = useState('')
+  const [shareError, setShareError] = useState(false)
   const [loadedUrl, setLoadedUrl] = useState('')
   const [collapsedIssues, setCollapsedIssues] = useState(new Set())
   const [sortOutput, setSortOutput] = useState(false)
@@ -129,6 +130,13 @@ export default function App() {
     const hash = window.location.hash.slice(1)
     if (!hash) return
     const decoded = decodeShare(hash)
+    // Clear the hash whether decoding succeeded or not — previously this
+    // only happened on success, so a corrupted/truncated share link (a
+    // copy-paste mishap, a chat client that wraps or trims long URLs) left
+    // nothing happening at all: no content loaded, no indication the link
+    // was broken, and the same dead hash still sitting in the address bar
+    // for the next reload or re-share to fail on again just the same way.
+    history.replaceState(null, '', window.location.pathname)
     if (decoded) {
       // Harmless today (this effect's empty deps array means it only ever
       // runs once, on mount, before any keystroke could have armed
@@ -139,7 +147,8 @@ export default function App() {
       clearTimeout(validateTimerRef.current)
       setInput(decoded)
       setResult(validateAdsTxt(decoded))
-      history.replaceState(null, '', window.location.pathname)
+    } else {
+      setShareError(true)
     }
   }, [])
 
@@ -562,6 +571,10 @@ export default function App() {
       </header>
 
       <main className="main">
+
+        {shareError && (
+          <p className="file-error">Could not open this share link — it looks corrupted or truncated.</p>
+        )}
 
         {/* URL loader */}
         <div className="url-bar">

@@ -366,6 +366,38 @@ describe('App — file loading', () => {
   )
 })
 
+describe('App — share links', () => {
+  afterEach(() => {
+    window.history.replaceState(null, '', window.location.pathname)
+  })
+
+  it(
+    'shows an error and clears the hash instead of doing nothing when a share link fails to decode',
+    () => {
+      // Before this fix, a corrupted/truncated share hash (a copy-paste
+      // mishap, a chat client that wraps or trims long URLs) left nothing
+      // happening at all on mount: no content loaded, no indication the
+      // link was broken, and the dead hash stayed in the address bar.
+      window.location.hash = '#not-valid-base64-!!!'
+
+      render(<App />)
+
+      expect(screen.getByText(/Could not open this share link/)).toBeTruthy()
+      expect(window.location.hash).toBe('')
+    }
+  )
+
+  it('loads the shared content and clears the hash when decoding succeeds', async () => {
+    const { encodeShare } = await import('../share.js')
+    window.location.hash = `#${encodeShare('a.com, pub-1, DIRECT')}`
+
+    render(<App />)
+
+    expect(screen.getByLabelText('app-ads.txt input').value).toBe('a.com, pub-1, DIRECT')
+    expect(window.location.hash).toBe('')
+  })
+})
+
 describe('App — version history', () => {
   it(
     'does not lose a version saved while a history import is still reading the file — ' +
