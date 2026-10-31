@@ -1179,7 +1179,18 @@ function DiffRow({ change, onJumpToLine }) {
   const meta = DIFF_META[change.type] ?? { label: change.type, cls: 'info' }
   return (
     <div className={`diff-row diff-row-${meta.cls}`}>
-      <button type="button" className="diff-lineno" title="Jump to this line" onClick={() => onJumpToLine?.(change.lineNumber)}>
+      {/* Visible text is a bare number ("42"), so its accessible name
+          defaulted to the same thing — indistinguishable from the plain,
+          non-interactive line numbers shown elsewhere (e.g. IssueCard's own
+          jump button at least says "Line 42"). Same gap as the version-rename
+          button fixed earlier: title isn't reliably read by screen readers. */}
+      <button
+        type="button"
+        className="diff-lineno"
+        title="Jump to this line"
+        aria-label={`Jump to line ${change.lineNumber}`}
+        onClick={() => onJumpToLine?.(change.lineNumber)}
+      >
         {change.lineNumber}
       </button>
       <code className="diff-original">{change.original}</code>

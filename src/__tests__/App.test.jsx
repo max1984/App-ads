@@ -341,6 +341,23 @@ describe('App — accessibility', () => {
       expect(editor.selectionEnd).toBe(28)
     }
   )
+
+  it(
+    'regression: the Changes panel\'s per-row "jump to line" button must announce which line it ' +
+      'jumps to, not just echo the bare line number — its only visible text is the number itself ' +
+      '(e.g. "2"), with the action explained only via title, same gap as the version-rename button ' +
+      "and unlike its sibling in the Issues panel, which at least says \"Line 2\"",
+    () => {
+      render(<App />)
+      typeInput('OWNERDOMAIN=example.com\nGoogle.com, pub-1, direct')
+      fireEvent.click(screen.getByRole('button', { name: /Validate/ }))
+      // The Changes panel auto-opens (showDiff is set true) whenever there
+      // are changes — no need to click its toggle, which would instead CLOSE it.
+
+      expect(screen.queryByRole('button', { name: '2' })).toBeFalsy()
+      expect(screen.getByRole('button', { name: 'Jump to line 2' })).toBeTruthy()
+    }
+  )
 })
 
 describe('App — dark mode', () => {
