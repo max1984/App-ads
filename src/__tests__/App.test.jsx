@@ -613,6 +613,23 @@ describe('App — version history', () => {
   )
 
   it(
+    'regression: the rename button must announce it renames, not just echo the version label ' +
+      '— its visible text IS the version label (e.g. "Version 1"), with "Click to rename" only in ' +
+      'a title attribute (a mouse-hover tooltip, not reliably read by screen readers — the same gap ' +
+      'already fixed once in this file for the health-score badge), so without an explicit aria-label ' +
+      'its accessible name was indistinguishable from plain, non-interactive label text',
+    () => {
+      render(<App />)
+      fireEvent.click(screen.getByRole('button', { name: /Version history/ }))
+      typeInput('a.com, 1, DIRECT')
+      fireEvent.click(screen.getByRole('button', { name: /Save current as version/ }))
+
+      expect(screen.queryByRole('button', { name: 'Version 1' })).toBeFalsy()
+      expect(screen.getByRole('button', { name: 'Rename "Version 1"' })).toBeTruthy()
+    }
+  )
+
+  it(
     'alerts when renaming a version fails to persist, instead of pretending it stuck',
     () => {
       // Same "success state shown without checking the operation's result"
@@ -631,7 +648,7 @@ describe('App — version history', () => {
       vi.spyOn(window.localStorage, 'setItem').mockImplementation(() => {
         throw new Error('QuotaExceededError')
       })
-      fireEvent.click(screen.getByRole('button', { name: 'Version 1' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Rename "Version 1"' }))
 
       expect(screen.getByText('Renamed')).toBeTruthy()
       expect(alertSpy).toHaveBeenCalledTimes(1)

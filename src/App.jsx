@@ -1352,7 +1352,23 @@ function VersionRow({ version, isComparing, onRestore, onCompare, onRename, onDe
   return (
     <div className={`version-row${isComparing ? ' version-row-active' : ''}`}>
       <div className="version-info">
-        <button type="button" className="version-label" onClick={onRename} title="Click to rename">
+        {/* title alone isn't enough — same gap already fixed once in this file
+            for the health-score badge: a title attribute is a mouse-hover
+            tooltip, not reliably exposed to screen readers, and without an
+            aria-label this button's accessible name defaults to its own
+            visible text (the version's label, e.g. "Version 1") — identical
+            to how VersionDiffView/the version list display that same label
+            as plain, non-interactive text elsewhere on this page. A screen
+            reader user tabbing to it heard nothing indicating this button
+            performs a rename action at all, unlike Compare/Restore/Delete
+            right next to it, whose own visible text already says what they do. */}
+        <button
+          type="button"
+          className="version-label"
+          onClick={onRename}
+          title="Click to rename"
+          aria-label={`Rename "${version.label}"`}
+        >
           {version.label}
         </button>
         <span className="version-time">{formatVersionTime(version.timestamp)}</span>
