@@ -19,7 +19,7 @@ function cleanVersion(v) {
   return { id: v.id, label: v.label, timestamp: v.timestamp, content: v.content, stats }
 }
 
-// Returns { versions, added, skipped }; throws if the payload isn't a version list at all.
+// Returns { versions, added, skipped, droppedForSpace }; throws if the payload isn't a version list at all.
 export function mergeImportedVersions(existing, imported, max = MAX_VERSIONS) {
   if (!Array.isArray(imported)) throw new Error('not a version history file')
   const existingIds = new Set(existing.map(v => v.id))
@@ -31,7 +31,16 @@ export function mergeImportedVersions(existing, imported, max = MAX_VERSIONS) {
     fresh.push(cleanVersion(v))
   }
   const versions = [...existing, ...fresh].sort((a, b) => b.timestamp - a.timestamp).slice(0, max)
-  return { versions, added: fresh.filter(v => versions.includes(v)).length, skipped }
+  const added = fresh.filter(v => versions.includes(v)).length
+  // Valid, non-duplicate entries that still didn't make it in because the
+  // merged list overflowed `max` and got sliced — distinct from `skipped`
+  // above, which only counts entries that were never going to be kept at
+  // all (invalid shape or a duplicate id). Without tracking this
+  // separately, a caller surfacing "X added, Y skipped" to the user would
+  // silently round-trip these: every imported entry would be accounted
+  // for by neither count.
+  const droppedForSpace = fresh.length - added
+  return { versions, added, skipped, droppedForSpace }
 }
 
 export function loadVersions(storage = globalThis.localStorage) {

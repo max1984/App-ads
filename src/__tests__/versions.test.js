@@ -33,6 +33,19 @@ describe('mergeImportedVersions', () => {
     expect(versions).toEqual([{ id: 'b', label: 'V b', timestamp: 2, content: 'a.com, 1, DIRECT', stats: null }])
   })
 
+  it(
+    'reports a valid, non-duplicate entry sliced off by the max-history cap as ' +
+      'droppedForSpace, not silently uncounted by both added and skipped',
+    () => {
+      const { added, skipped, droppedForSpace } = mergeImportedVersions(
+        [], [v('a', 1, { evil: '<script>' }), v('b', 2)], 1
+      )
+      expect(added).toBe(1)
+      expect(skipped).toBe(0)
+      expect(droppedForSpace).toBe(1)
+    }
+  )
+
   it('throws on non-array payloads', () => {
     expect(() => mergeImportedVersions([], { versions: [] })).toThrow(/not a version history/)
   })

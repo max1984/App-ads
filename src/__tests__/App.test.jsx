@@ -606,6 +606,61 @@ describe('App — version history', () => {
       expect(alertSpy).toHaveBeenCalledTimes(1)
     }
   )
+
+  it(
+    'offers "Import history" even with zero saved versions — Export was correctly gated on ' +
+      'versions.length > 0 (nothing to export yet), but Import shared that same gate even ' +
+      'though its whole purpose is to ADD versions from a file, which made it impossible to ' +
+      'bootstrap history on a browser/profile that had none yet',
+    async () => {
+      render(<App />)
+      fireEvent.click(screen.getByRole('button', { name: /Version history/ }))
+      expect(screen.queryByText('Export history')).toBeFalsy()
+      expect(screen.getByRole('button', { name: /Import history/ })).toBeTruthy()
+
+      const jsonInput = document.querySelector('input[type="file"][accept*="json"]')
+      const imported = [{ id: 'imported-1', label: 'Imported', timestamp: 1000, content: 'b.com, 2, DIRECT', stats: null }]
+      const file = new File([JSON.stringify(imported)], 'app-ads-versions.json', { type: 'application/json' })
+      fireEvent.change(jsonInput, { target: { files: [file] } })
+
+      await waitFor(() => expect(screen.getByText('Imported')).toBeTruthy())
+    }
+  )
+
+  it(
+    'shows a success flash with added/skipped counts after importing history, instead of ' +
+      'silence — before the fix, only a failed persist (above) got any feedback at all, so a ' +
+      'successful import and one where every entry was a duplicate looked identical',
+    async () => {
+      render(<App />)
+      fireEvent.click(screen.getByRole('button', { name: /Version history/ }))
+      typeInput('a.com, 1, DIRECT')
+      fireEvent.click(screen.getByRole('button', { name: /Save current as version/ }))
+      expect(screen.getByText('Version 1')).toBeTruthy()
+
+      const jsonInput = document.querySelector('input[type="file"][accept*="json"]')
+      const imported = [{ id: 'imported-1', label: 'Imported', timestamp: 1000, content: 'b.com, 2, DIRECT', stats: null }]
+      const file = new File([JSON.stringify(imported)], 'app-ads-versions.json', { type: 'application/json' })
+      fireEvent.change(jsonInput, { target: { files: [file] } })
+
+      await waitFor(() => expect(screen.getByRole('button', { name: /Imported 1/ })).toBeTruthy())
+    }
+  )
+
+  it(
+    'flashes a warning on the Import button instead of doing nothing visibly when the ' +
+      'chosen file is not a version history at all',
+    async () => {
+      render(<App />)
+      fireEvent.click(screen.getByRole('button', { name: /Version history/ }))
+
+      const jsonInput = document.querySelector('input[type="file"][accept*="json"]')
+      const file = new File(['{"not": "a version list"}'], 'notes.json', { type: 'application/json' })
+      fireEvent.change(jsonInput, { target: { files: [file] } })
+
+      await waitFor(() => expect(screen.getByRole('button', { name: /Not a valid history file/ })).toBeTruthy())
+    }
+  )
 })
 
 describe('App — batch check', () => {

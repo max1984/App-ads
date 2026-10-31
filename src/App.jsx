@@ -100,6 +100,14 @@ export default function App() {
   // call — a boolean wouldn't re-fire this effect on a second import in a
   // row that fails the exact same way (no apparent *change* in value).
   const [importSaveFailures, setImportSaveFailures] = useState(0)
+  // null | 'invalid' | { added, skipped } — nothing previously told the user
+  // anything about a *successful* import, or one whose file wasn't a version
+  // history at all (JSON.parse/mergeImportedVersions failure is swallowed by
+  // handleImportVersions's catch below with a code comment, no UI). Importing
+  // a file that was entirely duplicates/invalid looked identical to importing
+  // one that genuinely added history: same silence either way. Same
+  // "✓ Saved!"-style flash already used for Save, on the Import button.
+  const [importFlash, setImportFlash] = useState(null)
   const [darkMode, setDarkMode] = useState(() => {
     const stored = loadStoredDarkMode()
     return stored !== null ? stored : window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false
@@ -113,6 +121,7 @@ export default function App() {
   const shareStatusTimerRef = useRef()
   const copiedNetworkTimerRef = useRef()
   const savedFlashTimerRef = useRef()
+  const importFlashTimerRef = useRef()
   const copiedOutputTimerRef = useRef()
 
   useEffect(() => {
@@ -366,31 +375,60 @@ export default function App() {
     if (!file) return
     const reader = new FileReader()
     reader.onload = (e) => {
+      const invalid = () => {
+        clearTimeout(importFlashTimerRef.current)
+        setImportFlash('invalid')
+        importFlashTimerRef.current = setTimeout(() => setImportFlash(null), 4000)
+      }
+      let imported
       try {
-        const imported = JSON.parse(e.target.result)
-        // FileReader is async — reading `versions` here (closed over at the click that
-        // started the read) would merge against whatever the list looked like back then,
-        // silently discarding a save/rename/delete that completed while the file was being
-        // read. Merge against the functional-updater's `prev` instead, so this always sees
-        // the current list — same race class as handleBatchCheck's batchGenRef guards against.
-        setVersions(prev => {
-          const { versions: merged } = mergeImportedVersions(prev, imported, MAX_VERSIONS)
-          // Same unchecked-persistVersions() gap as handleRenameVersion/
-          // handleDeleteVersion above — this is the fourth sibling call and
-          // was the one actually missed: a failed write here means the
-          // imported versions look merged in (they're in `merged`, now in
-          // React state) but vanish again on the next reload with no
-          // indication the import didn't really stick. The alert can't live
-          // right here, synchronously after this call returns — this
-          // updater runs whenever React gets around to it (it's queued from
-          // FileReader.onload, outside any React event handler), not
-          // necessarily before the very next line of this function — so the
-          // failure is surfaced through its own state instead, picked up by
-          // the effect below once React actually commits it.
-          if (!persistVersions(merged)) setImportSaveFailures(n => n + 1)
-          return merged
-        })
-      } catch { /* not a version history file, or malformed JSON — ignore */ }
+        imported = JSON.parse(e.target.result)
+      } catch {
+        invalid()
+        return
+      }
+      // mergeImportedVersions() throws on this exact condition — checked
+      // again here, before setVersions, instead of relying on that throw:
+      // it has to run inside the setVersions functional updater below (see
+      // there for why), and React does not run that updater synchronously
+      // within this call stack, so a throw from inside it is NOT caught by
+      // a try/catch wrapped around the setVersions() call — it surfaced as
+      // an uncaught exception instead of the graceful "ignore" the dead
+      // catch block here used to claim.
+      if (!Array.isArray(imported)) {
+        invalid()
+        return
+      }
+      // FileReader is async — reading `versions` here (closed over at the click that
+      // started the read) would merge against whatever the list looked like back then,
+      // silently discarding a save/rename/delete that completed while the file was being
+      // read. Merge against the functional-updater's `prev` instead, so this always sees
+      // the current list — same race class as handleBatchCheck's batchGenRef guards against.
+      setVersions(prev => {
+        const merged = mergeImportedVersions(prev, imported, MAX_VERSIONS)
+        // Same unchecked-persistVersions() gap as handleRenameVersion/
+        // handleDeleteVersion above — this is the fourth sibling call and
+        // was the one actually missed: a failed write here means the
+        // imported versions look merged in (they're in `merged`, now in
+        // React state) but vanish again on the next reload with no
+        // indication the import didn't really stick. The alert can't live
+        // right here, synchronously after this call returns — this
+        // updater runs whenever React gets around to it (it's queued from
+        // FileReader.onload, outside any React event handler), not
+        // necessarily before the very next line of this function — so the
+        // failure is surfaced through its own state instead, picked up by
+        // the effect below once React actually commits it.
+        if (!persistVersions(merged.versions)) setImportSaveFailures(n => n + 1)
+        // Set from inside this updater, not after setVersions() returns, for
+        // the exact same reason as the comment just above: there is no
+        // guarantee this updater has even run yet by the next line of this
+        // function, so added/skipped read from out there could still be
+        // their unset initial values.
+        clearTimeout(importFlashTimerRef.current)
+        setImportFlash({ added: merged.added, skipped: merged.skipped + merged.droppedForSpace })
+        importFlashTimerRef.current = setTimeout(() => setImportFlash(null), 3000)
+        return merged.versions
+      })
     }
     reader.readAsText(file, 'utf-8')
   }
@@ -699,11 +737,21 @@ export default function App() {
                 {savedFlash === 'saved' ? '✓ Saved!' : savedFlash === 'failed' ? '⚠ Save failed (storage full?)' : 'Save current as version'}
               </button>
               {versions.length > 0 && (
-                <>
-                  <button className="btn btn-ghost" onClick={handleExportVersions}>Export history</button>
-                  <button className="btn btn-ghost" onClick={() => versionFileInputRef.current.click()}>Import history</button>
-                </>
+                <button className="btn btn-ghost" onClick={handleExportVersions}>Export history</button>
               )}
+              {/* Unlike Export above, this must NOT be gated on versions.length > 0 — its whole
+                  purpose is to ADD versions from a file, including bootstrapping history on a
+                  browser/profile that doesn't have any yet (new machine, cleared storage, a
+                  history file handed over by someone else). Gating it the same way as Export
+                  made that impossible: with zero local versions, this button simply didn't
+                  exist, and the empty-state message below didn't mention it as an option either. */}
+              <button className="btn btn-ghost" onClick={() => versionFileInputRef.current.click()}>
+                {importFlash === 'invalid'
+                  ? '⚠ Not a valid history file'
+                  : importFlash
+                    ? `✓ Imported ${importFlash.added}${importFlash.skipped > 0 ? ` (${importFlash.skipped} skipped)` : ''}`
+                    : 'Import history'}
+              </button>
               <input
                 ref={versionFileInputRef}
                 type="file"
@@ -714,7 +762,7 @@ export default function App() {
             </div>
 
             {versions.length === 0 ? (
-              <p className="versions-empty">No saved versions yet — click "Save current as version" to start tracking changes over time.</p>
+              <p className="versions-empty">No saved versions yet — click "Save current as version" to start tracking changes over time, or "Import history" to load a previously exported file.</p>
             ) : (
               <div className="versions-list">
                 {versions.map(v => (
