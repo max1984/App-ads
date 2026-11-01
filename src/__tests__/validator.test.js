@@ -134,6 +134,27 @@ describe('validateAdsTxt — variables', () => {
     expect(r.issues.some(i => i.severity === 'error' && /OWNERDOMAIN/.test(i.message))).toBe(true)
   })
 
+  // Regression: a comma inside OWNERDOMAIN/SUBDOMAIN/INVENTORYPARTNERDOMAIN's value
+  // (a plausible typo, or a user treating it like CONTACT's comma-separated list)
+  // used to silently truncate at the following whitespace WITHOUT stripping the
+  // comma itself first — producing a malformed value with a literal trailing comma
+  // (e.g. 'example.com,') that still passed domain validation unflagged, since the
+  // validity check ran on a comma-split copy that was never written back.
+  it('strips trailing garbage after a comma in OWNERDOMAIN instead of leaving a dangling comma', () => {
+    const r = validateAdsTxt('OWNERDOMAIN=example.com, some extra note\nfoo.com, 1, DIRECT')
+    expect(r.variables.OWNERDOMAIN).toBe('example.com')
+    expect(r.cleanedContent.split('\n')[0]).toBe('OWNERDOMAIN=example.com')
+    expect(r.issues.some(i => /OWNERDOMAIN/.test(i.message) && i.severity === 'error')).toBe(false)
+  })
+
+  it('strips trailing garbage after a comma in SUBDOMAIN and INVENTORYPARTNERDOMAIN too', () => {
+    const r = validateAdsTxt(
+      'OWNERDOMAIN=a.com\nSUBDOMAIN=sub.example.com, extra\nINVENTORYPARTNERDOMAIN=partner.com, extra\nfoo.com, 1, DIRECT'
+    )
+    expect(r.variables.SUBDOMAIN).toBe('sub.example.com')
+    expect(r.variables.INVENTORYPARTNERDOMAIN).toBe('partner.com')
+  })
+
   it('warns on multiple OWNERDOMAIN and unsupported variables', () => {
     const r = validateAdsTxt('OWNERDOMAIN=a.com\nOWNERDOMAIN=b.com\nFOO=bar')
     expect(r.issues.some(i => /Multiple OWNERDOMAIN/.test(i.message))).toBe(true)

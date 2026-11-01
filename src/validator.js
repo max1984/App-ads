@@ -338,9 +338,22 @@ function companyOf(name) {
 }
 
 // Strips scheme, path, query and case: 'https://Google.com/x' → 'google.com'.
+// Comma is also a terminator here, not just slash/query/hash/whitespace: a bare
+// domain never legitimately contains one, and OWNERDOMAIN/SUBDOMAIN/
+// INVENTORYPARTNERDOMAIN below pass this function their ENTIRE raw value
+// unsplit (unlike a record's domain field, already comma-split by its caller,
+// or MANAGERDOMAIN's domainPart, already split off before its optional
+// ',COUNTRY' suffix). Without this, a value like
+// 'OWNERDOMAIN=example.com, some note' (a comma typo, or CONTACT-style
+// trailing text) silently became the domain 'example.com,' — WITH the
+// trailing comma attached, since nothing after it stopped the split at
+// comma — which still passes DOMAIN_REGEX validation below (checked via
+// `.split(',')[0]`, which only validates, never corrects outValue itself)
+// and was written into the cleaned output and `variables` completely
+// unflagged, with the rest of the value silently dropped.
 function toBareDomain(value) {
   const schemeStripped = value.trim().replace(/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//, '')
-  return schemeStripped.split(/[\/?#\s]/)[0].toLowerCase()
+  return schemeStripped.split(/[\/?#\s,]/)[0].toLowerCase()
 }
 
 export function validateAdsTxt(content) {
