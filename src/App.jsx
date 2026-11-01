@@ -187,6 +187,12 @@ export default function App() {
     const text = e.target.value
     setInput(text)
     setLoadedUrl('')  // BUG-03 FIX: clear stale URL breadcrumb on manual edit
+    // Clear button already resets this (see its own comment) — but a failed
+    // "Upload file" attempt's error, shown right above this same editor, was
+    // just as stale once the user simply typed over it by hand instead of
+    // clicking Clear: the message kept describing an upload that no longer
+    // has anything to do with what's now in the box.
+    setFileError('')
     clearTimeout(validateTimerRef.current)
     if (!text.trim()) { setResult(null); return }
     validateTimerRef.current = setTimeout(() => setResult(validateAdsTxt(text)), 300)
@@ -201,6 +207,14 @@ export default function App() {
     clearTimeout(validateTimerRef.current)
     setInput(text)
     setResult(validateAdsTxt(text))
+    // Same staleness as handleInputChange just above: this is the shared
+    // path for every OTHER way the Input panel's content gets replaced
+    // wholesale (Load URL, Restore version, batch "Load") — none of them
+    // went through loadFile()/Clear, the only two places that reset
+    // fileError, so a previous failed upload's message outlived whatever
+    // new content now sits in the editor until the user happened to try
+    // "Upload file" again.
+    setFileError('')
   }, [])
 
   const loadFile = useCallback((file) => {

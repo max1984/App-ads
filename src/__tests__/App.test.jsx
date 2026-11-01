@@ -478,6 +478,66 @@ describe('App — file loading', () => {
       }
     }
   )
+
+  it(
+    'clears the stale file-read error when the user types over it by hand, not just via Clear',
+    async () => {
+      // Clear (tested above) was the only other place fileError got reset
+      // besides a successful loadFile() — simply typing new content into the
+      // editor by hand, without ever clicking Clear, left the old "Failed to
+      // read broken.txt" message sitting above the editor describing an
+      // upload that no longer has anything to do with what's now in the box.
+      const originalReadAsText = FileReader.prototype.readAsText
+      FileReader.prototype.readAsText = function () { this.onerror?.() }
+      try {
+        render(<App />)
+        const file = new File(['irrelevant'], 'broken.txt', { type: 'text/plain' })
+        const fileInput = document.querySelector('input[type="file"][accept=".txt,text/plain"]')
+        fireEvent.change(fileInput, { target: { files: [file] } })
+        await screen.findByText(/Failed to read broken\.txt/)
+
+        typeInput('google.com, pub-1, DIRECT')
+
+        expect(screen.queryByText(/Failed to read broken\.txt/)).toBeNull()
+      } finally {
+        FileReader.prototype.readAsText = originalReadAsText
+      }
+    }
+  )
+
+  it(
+    'clears the stale file-read error when a URL load replaces the input, not just via Clear',
+    async () => {
+      // Same gap as the "typing over it by hand" case just above, but for
+      // every OTHER way the whole input gets replaced through loadText()
+      // (Load URL here; Restore version and batch "Load" share the exact
+      // same code path) — none of them went through loadFile()/Clear, the
+      // only two spots that used to reset fileError.
+      const originalReadAsText = FileReader.prototype.readAsText
+      FileReader.prototype.readAsText = function () { this.onerror?.() }
+      try {
+        render(<App />)
+        const file = new File(['irrelevant'], 'broken.txt', { type: 'text/plain' })
+        const fileInput = document.querySelector('input[type="file"][accept=".txt,text/plain"]')
+        fireEvent.change(fileInput, { target: { files: [file] } })
+        await screen.findByText(/Failed to read broken\.txt/)
+      } finally {
+        FileReader.prototype.readAsText = originalReadAsText
+      }
+
+      // mockReset() first: an earlier, unrelated test in this file queues a
+      // mockRejectedValueOnce() that it never actually consumes (it asserts
+      // fetchFromUrl was called only once, deliberately leaving the second
+      // queued result unused) — without clearing it here, that leftover
+      // rejection — not this test's own mockResolvedValue — is what the next
+      // fetchFromUrl() call anywhere later in the suite would get.
+      urlModule.fetchFromUrl.mockReset().mockResolvedValue('google.com, pub-1, DIRECT')
+      fireEvent.change(screen.getByPlaceholderText(/example\.com/), { target: { value: 'example.com' } })
+      fireEvent.click(screen.getByRole('button', { name: 'Load' }))
+
+      await waitFor(() => expect(screen.queryByText(/Failed to read broken\.txt/)).toBeNull())
+    }
+  )
 })
 
 describe('App — share links', () => {
