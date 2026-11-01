@@ -1,6 +1,14 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
+  /* Tell the UA to render native widgets (checkboxes, scrollbars, select
+     dropdowns) in the light scheme, matching the manual dark-mode toggle
+     below rather than silently following the OS/browser preference —
+     without this, a user whose OS is dark but who picks "light" here (or
+     vice versa) gets light-on-dark/dark-on-light native controls that
+     clash with every custom-styled element around them. */
+  color-scheme: light;
+
   /* Layout */
   --bg: #f1f5f9;
   --surface: #ffffff;
@@ -44,6 +52,11 @@
 
 /* ── Dark mode overrides ────────────────────────────────────────── */
 [data-dark] {
+  /* Flips native widgets (checkbox, scrollbar, select) to the dark scheme
+     in lockstep with the manual toggle in App.jsx — see the :root comment
+     above for why this can't be left to the OS/browser default. */
+  color-scheme: dark;
+
   --bg: #0f172a;
   --surface: #1e293b;
   --border: #334155;
