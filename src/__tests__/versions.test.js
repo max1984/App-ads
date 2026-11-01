@@ -69,4 +69,29 @@ describe('version storage', () => {
     expect(backupKey).toMatch(new RegExp(`^${VERSIONS_KEY}-corrupt-`))
     expect(s.getItem(backupKey)).toBe('{not valid json')
   })
+
+  // Regression: `storage` used to default to `globalThis.localStorage` as a plain default
+  // parameter, evaluated at call time BEFORE either function's try/catch runs. Some
+  // privacy-locked-down browsing contexts (strict private mode, storage blocked by
+  // browser/enterprise policy, certain sandboxed webviews) throw just from touching the
+  // `localStorage` property — not only from getItem/setItem — which such a default parameter
+  // can't catch. These must fall back to "no saved history" like any other storage failure,
+  // not crash (this runs inside App.jsx's `useState(() => loadVersions())` initializer, with
+  // no error boundary to catch an escaping exception).
+  it('falls back instead of throwing when merely accessing localStorage is blocked (no storage argument passed)', () => {
+    const original = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      get() { throw new Error('SecurityError: The operation is insecure.') },
+    })
+    try {
+      expect(() => loadVersions()).not.toThrow()
+      expect(loadVersions()).toEqual([])
+      expect(() => persistVersions([v('a', 1)])).not.toThrow()
+      expect(persistVersions([v('a', 1)])).toBe(false)
+    } finally {
+      if (original) Object.defineProperty(globalThis, 'localStorage', original)
+      else delete globalThis.localStorage
+    }
+  })
 })

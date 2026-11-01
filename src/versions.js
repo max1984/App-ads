@@ -43,26 +43,45 @@ export function mergeImportedVersions(existing, imported, max = MAX_VERSIONS) {
   return { versions, added, skipped, droppedForSpace }
 }
 
-export function loadVersions(storage = globalThis.localStorage) {
-  const raw = storage.getItem(VERSIONS_KEY)
-  if (!raw) return []
+// `storage` defaults to `globalThis.localStorage` INSIDE the try below, not as a default
+// parameter value — a default parameter expression is evaluated at call time before the
+// function body (and its try/catch) ever runs. Some privacy-locked-down browsing contexts
+// (strict private-mode configurations, storage blocked by browser/enterprise policy, certain
+// sandboxed webviews) throw a SecurityError on merely touching the `localStorage` property,
+// not just on getItem/setItem. With a default parameter, that throw would happen before
+// entering this function's try/catch at all and propagate straight out — and since this runs
+// inside App.jsx's `useState(() => loadVersions())` initializer with no error boundary around
+// it, that crashes the entire app to a blank page instead of just falling back to "no saved
+// history", the same "best effort" fallback `loadStoredDarkMode`/`persistDarkMode` already
+// give this exact failure mode elsewhere in App.jsx.
+export function loadVersions(storage) {
   try {
-    const parsed = JSON.parse(raw)
-    return Array.isArray(parsed) ? parsed.filter(isValidVersion).map(cleanVersion) : []
+    const s = storage ?? globalThis.localStorage
+    const raw = s.getItem(VERSIONS_KEY)
+    if (!raw) return []
+    try {
+      const parsed = JSON.parse(raw)
+      return Array.isArray(parsed) ? parsed.filter(isValidVersion).map(cleanVersion) : []
+    } catch {
+      // Corrupt JSON (not just an empty/missing key). The next persistVersions()
+      // call (e.g. saving a new version) overwrites VERSIONS_KEY unconditionally
+      // with whatever's in memory, which would silently and permanently destroy
+      // this value — back it up under a different key first instead of losing it.
+      try { s.setItem(`${VERSIONS_KEY}-corrupt-${Date.now()}`, raw) } catch { /* best effort */ }
+      return []
+    }
   } catch {
-    // Corrupt JSON (not just an empty/missing key). The next persistVersions()
-    // call (e.g. saving a new version) overwrites VERSIONS_KEY unconditionally
-    // with whatever's in memory, which would silently and permanently destroy
-    // this value — back it up under a different key first instead of losing it.
-    try { storage.setItem(`${VERSIONS_KEY}-corrupt-${Date.now()}`, raw) } catch { /* best effort */ }
     return []
   }
 }
 
-// Returns false when the browser refused to store (quota exceeded, private mode…).
-export function persistVersions(list, storage = globalThis.localStorage) {
+// Returns false when the browser refused to store (quota exceeded, private mode, or
+// `localStorage` itself unreachable — see loadVersions' comment above for why the fallback
+// is resolved inside the try instead of as a default parameter).
+export function persistVersions(list, storage) {
   try {
-    storage.setItem(VERSIONS_KEY, JSON.stringify(list))
+    const s = storage ?? globalThis.localStorage
+    s.setItem(VERSIONS_KEY, JSON.stringify(list))
     return true
   } catch { return false }
 }
