@@ -193,6 +193,13 @@ export default function App() {
     // clicking Clear: the message kept describing an upload that no longer
     // has anything to do with what's now in the box.
     setFileError('')
+    // Same stale-banner class, third instance: the mount-time "Could not
+    // open this share link" message (set once in the hash-decode effect
+    // above) had NO clearing path at all anywhere in the file — typing over
+    // it, loading a URL/file/version/batch result, even clicking Clear all
+    // left it sitting at the top of the page for the rest of the session,
+    // long after it stopped describing anything still on screen.
+    setShareError(false)
     clearTimeout(validateTimerRef.current)
     if (!text.trim()) { setResult(null); return }
     validateTimerRef.current = setTimeout(() => setResult(validateAdsTxt(text)), 300)
@@ -225,6 +232,9 @@ export default function App() {
     // overwrites this with the new URL in the same tick, so that path is
     // unaffected.
     setLoadedUrl('')
+    // See handleInputChange's comment above: the share-link-decode-failed
+    // banner needs clearing here too, same shared-path gap.
+    setShareError(false)
   }, [])
 
   const loadFile = useCallback((file) => {
@@ -840,6 +850,9 @@ export default function App() {
                   // it was about, until the next upload attempt happened to
                   // replace it.
                   setFileError('')
+                  // Same gap for the share-link-decode-failed banner — see
+                  // handleInputChange/loadText's comments.
+                  setShareError(false)
                 }}>
                   Clear
                 </button>

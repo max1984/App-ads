@@ -570,6 +570,25 @@ describe('App — share links', () => {
     expect(screen.getByLabelText('app-ads.txt input').value).toBe('a.com, pub-1, DIRECT')
     expect(window.location.hash).toBe('')
   })
+
+  it(
+    'regression: the broken-share-link banner must not outlive it once new content replaces it',
+    () => {
+      // Before this fix, shareError (set once on mount when the hash fails
+      // to decode) had no clearing path anywhere in the file — typing over
+      // it, loading a URL/file/version/batch result, even clicking Clear all
+      // left "Could not open this share link" sitting at the top of the
+      // page for the rest of the session, long after it stopped describing
+      // anything still on screen.
+      window.location.hash = '#not-valid-base64-!!!'
+      render(<App />)
+      expect(screen.getByText(/Could not open this share link/)).toBeTruthy()
+
+      typeInput('a.com, pub-1, DIRECT')
+
+      expect(screen.queryByText(/Could not open this share link/)).toBeNull()
+    }
+  )
 })
 
 describe('App — error messages are announced to screen readers', () => {
