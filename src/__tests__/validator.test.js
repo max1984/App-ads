@@ -233,6 +233,26 @@ describe('validateAdsTxt — line endings', () => {
   })
 })
 
+describe('validateAdsTxt — BOM handling', () => {
+  it('strips a leading BOM so the first line parses normally', () => {
+    const r = validateAdsTxt('﻿' + OWNER + 'example.com, pub-1, DIRECT')
+    expect(r.records[0].domain).toBe('example.com')
+    expect(r.stats.errors).toBe(0)
+  })
+
+  it('strips a BOM embedded mid-line, e.g. from two files pasted together without a newline between them', () => {
+    // Regression: toBareDomain's `.split(/[\/?#\s]/)` treats U+FEFF as a
+    // separator (it's part of JS regex `\s`), so an un-stripped BOM in the
+    // middle of a domain used to silently truncate it ("exa﻿mple.com"
+    // became the domain "exa", reported as "Invalid domain 'exa'" with no
+    // hint that an invisible character caused it).
+    const r = validateAdsTxt(OWNER + 'exa﻿mple.com, pub-1, DIRECT, f08c47fec0942fa0')
+    expect(r.records[0].domain).toBe('example.com')
+    expect(r.stats.errors).toBe(0)
+    expect(r.issues.some(i => /Invalid domain/.test(i.message))).toBe(false)
+  })
+})
+
 describe('validateAdsTxt — record domain cleanup', () => {
   it('strips scheme and path from record domains and marks the line corrected', () => {
     const r = validateAdsTxt(OWNER + 'https://Foo.com/, 1, DIRECT')

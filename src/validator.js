@@ -344,6 +344,17 @@ function toBareDomain(value) {
 }
 
 export function validateAdsTxt(content) {
+  // Strip every BOM (U+FEFF), not just a leading one. A BOM at the very start of
+  // the file is already harmless — each line below is trimmed, and JS's trim()
+  // treats U+FEFF as whitespace — but a stray BOM ANYWHERE ELSE in the file (e.g.
+  // two app-ads.txt exports pasted together without a newline between them, each
+  // starting with its own BOM, or one reintroduced mid-line by a lossy copy/paste
+  // from a PDF/web page) is invisible yet still a real character. toBareDomain's
+  // `.split(/[\/?#\s]/)` below treats it as a separator too (U+FEFF is also part
+  // of JS regex `\s`), silently truncating a domain at that point — e.g.
+  // "exa<BOM>mple.com" became the domain "exa", reported as "Invalid domain
+  // 'exa'" with no hint that an invisible character, not a typo, caused it.
+  content = content.replace(/\uFEFF/g, '')
   // Normalize CRLF / lone CR so Windows-edited files don't produce mixed line endings in the output.
   const lines = content.split(/\r\n?|\n/)
   const correctedLines = []
