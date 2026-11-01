@@ -184,6 +184,20 @@ describe('validateAdsTxt — variables', () => {
     const r = validateAdsTxt('OWNERDOMAIN=a.com\nOWNERDOMAIN=b.com')
     expect(r.outputLineStatuses[1]).toBe('warning')
   })
+
+  // Regression: a malformed second OWNERDOMAIN line (typo, stray text, not a domain at all)
+  // used to ALSO raise "Multiple OWNERDOMAIN declarations" alongside the "doesn't look like
+  // a valid domain" error — two issues for one broken line, with the warning's "remove this
+  // line" suggestion actively misleading (the real fix is correcting the typo, not choosing
+  // between two legitimate domains). MANAGERDOMAIN's identical conflict check already guards
+  // against this by only running once the line's domain is known to be valid; OWNERDOMAIN's
+  // check ran unconditionally before that validity check and didn't.
+  it('does not also warn "Multiple OWNERDOMAIN declarations" when the second line is simply malformed', () => {
+    const r = validateAdsTxt('OWNERDOMAIN=example.com\nOWNERDOMAIN=not a domain')
+    const lineTwoIssues = r.issues.filter(i => i.lineNumber === 2)
+    expect(lineTwoIssues.map(i => i.message)).toEqual([`OWNERDOMAIN value 'not a domain' doesn't look like a valid domain.`])
+    expect(r.issues.some(i => /Multiple OWNERDOMAIN/.test(i.message))).toBe(false)
+  })
 })
 
 describe('compareSnapshots', () => {

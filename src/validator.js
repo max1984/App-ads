@@ -445,15 +445,6 @@ export function validateAdsTxt(content) {
         return
       }
 
-      if (varName === 'OWNERDOMAIN' && variables[varName] && variables[varName] !== toBareDomain(value)) {
-        pushIssue({
-          severity: 'warning', lineNumber,
-          message: `Multiple OWNERDOMAIN declarations — only one is allowed per spec.`,
-          original: stripped,
-          suggestion: `Remove this line and keep only one OWNERDOMAIN declaration.`
-        })
-      }
-
       // *DOMAIN variables must be a bare lowercase domain — strip scheme/path/case silently,
       // same as we do for record domains, and only raise an issue if it's still malformed.
       let outValue = value
@@ -481,6 +472,23 @@ export function validateAdsTxt(content) {
             original: stripped,
             suggestion: `Use a bare domain such as 'example.com' — no scheme, path, spaces, or port.`
           })
+        } else if (varName === 'OWNERDOMAIN') {
+          // Flag a second OWNERDOMAIN line only now that we know THIS line's value
+          // actually parses as a valid domain — this check used to run unconditionally
+          // before the validity check above, so a malformed second line (a typo, stray
+          // text instead of a domain) got BOTH this "multiple declarations" warning AND
+          // the "doesn't look like a valid domain" error for the exact same line, with a
+          // misleading "remove this line" suggestion piled on top of the real fix
+          // needed. MANAGERDOMAIN's analogous conflict check right below already guards
+          // against this the same way.
+          if (variables[varName] && variables[varName] !== domainOnly) {
+            pushIssue({
+              severity: 'warning', lineNumber,
+              message: `Multiple OWNERDOMAIN declarations — only one is allowed per spec.`,
+              original: stripped,
+              suggestion: `Remove this line and keep only one OWNERDOMAIN declaration.`
+            })
+          }
         } else if (varName === 'MANAGERDOMAIN') {
           // Same "conflicting second declaration" check OWNERDOMAIN already has above,
           // just keyed per country — a second MANAGERDOMAIN for the SAME country (or a
