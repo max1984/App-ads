@@ -682,6 +682,31 @@ describe('App — version history', () => {
   )
 
   it(
+    'regression: restoring a saved version clears the stale "Loaded from: <url>" breadcrumb, ' +
+      'not just the content — loadText() (the shared path for Restore version and batch "Load") ' +
+      'already clears fileError on every path that replaces the editor content, but loadedUrl was ' +
+      'only ever cleared by typing by hand or clicking Clear, so loading a URL and then restoring a ' +
+      'saved version left the breadcrumb pointing at the old URL even though the content on screen ' +
+      'no longer came from it',
+    async () => {
+      urlModule.fetchFromUrl.mockResolvedValueOnce('google.com, pub-1, DIRECT')
+      render(<App />)
+      fireEvent.click(screen.getByRole('button', { name: /Version history/ }))
+      typeInput('a.com, 1, DIRECT')
+      fireEvent.click(screen.getByRole('button', { name: /Save current as version/ }))
+      expect(screen.getByText('Version 1')).toBeTruthy()
+
+      fireEvent.change(screen.getByPlaceholderText(/example\.com/), { target: { value: 'example.com' } })
+      fireEvent.click(screen.getByRole('button', { name: 'Load' }))
+      await screen.findByText(/Loaded from:/)
+
+      fireEvent.click(screen.getByRole('button', { name: 'Restore' }))
+
+      expect(screen.queryByText(/Loaded from:/)).toBeNull()
+    }
+  )
+
+  it(
     'asks for confirmation before deleting a saved version, and keeps it when the user declines',
     () => {
       render(<App />)

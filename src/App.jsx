@@ -215,6 +215,16 @@ export default function App() {
     // new content now sits in the editor until the user happened to try
     // "Upload file" again.
     setFileError('')
+    // Same gap, different stale state: the "Loaded from: <url>" breadcrumb
+    // is only ever set by handleLoadUrl (which calls setLoadedUrl(url) right
+    // after this), but nothing cleared it on the other two paths through
+    // this shared function — Restore version and batch "Load" — so loading
+    // a URL and then restoring a saved version (or loading a batch-checked
+    // URL's content) left the breadcrumb pointing at the OLD URL, falsely
+    // implying the content now on screen still came from it. handleLoadUrl
+    // overwrites this with the new URL in the same tick, so that path is
+    // unaffected.
+    setLoadedUrl('')
   }, [])
 
   const loadFile = useCallback((file) => {
