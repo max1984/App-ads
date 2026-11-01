@@ -344,17 +344,20 @@ function toBareDomain(value) {
 }
 
 export function validateAdsTxt(content) {
-  // Strip every BOM (U+FEFF), not just a leading one. A BOM at the very start of
-  // the file is already harmless — each line below is trimmed, and JS's trim()
-  // treats U+FEFF as whitespace — but a stray BOM ANYWHERE ELSE in the file (e.g.
-  // two app-ads.txt exports pasted together without a newline between them, each
-  // starting with its own BOM, or one reintroduced mid-line by a lossy copy/paste
-  // from a PDF/web page) is invisible yet still a real character. toBareDomain's
-  // `.split(/[\/?#\s]/)` below treats it as a separator too (U+FEFF is also part
-  // of JS regex `\s`), silently truncating a domain at that point — e.g.
-  // "exa<BOM>mple.com" became the domain "exa", reported as "Invalid domain
-  // 'exa'" with no hint that an invisible character, not a typo, caused it.
-  content = content.replace(/\uFEFF/g, '')
+  // Strip every invisible Unicode space character, not just the BOM (U+FEFF).
+  // Any of these at the very start of a line is already harmless — each line
+  // below is trimmed, and JS's trim() treats all of them as whitespace — but
+  // one ANYWHERE ELSE in the file (e.g. two app-ads.txt exports pasted together
+  // without a newline between them, or one reintroduced mid-domain by a lossy
+  // copy/paste from a PDF/word processor that silently turns a plain space into
+  // U+00A0 NBSP) is invisible yet still a real character. toBareDomain's
+  // `.split(/[\/?#\s]/)` below treats ANY of them as a separator too —
+  // they're all part of JS regex `\s`, not just U+FEFF — silently truncating a
+  // domain at that point — e.g. "exa<NBSP>mple.com" became the domain "exa",
+  // reported as "Invalid domain 'exa'" with no hint that an invisible character,
+  // not a typo, caused it. (U+2028/U+2029 are included too: they aren't treated
+  // as line breaks by the line-splitting below, but they are part of `\s`.)
+  content = content.replace(/[\u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000\uFEFF]/g, '')
   // Normalize CRLF / lone CR so Windows-edited files don't produce mixed line endings in the output.
   const lines = content.split(/\r\n?|\n/)
   const correctedLines = []

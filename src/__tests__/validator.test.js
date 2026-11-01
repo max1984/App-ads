@@ -251,6 +251,24 @@ describe('validateAdsTxt — BOM handling', () => {
     expect(r.stats.errors).toBe(0)
     expect(r.issues.some(i => /Invalid domain/.test(i.message))).toBe(false)
   })
+
+  it('strips a non-breaking space (and other Unicode space separators) embedded mid-domain', () => {
+    // Regression: U+00A0 (NBSP), like U+FEFF, is part of JS regex \s, so
+    // toBareDomain's split on /[\/?#\s]/ truncated a domain at a stray NBSP
+    // exactly the same way it used to at a stray BOM -- e.g. from a word
+    // processor or PDF that silently turns a plain space into a NBSP during
+    // copy/paste ("exa\u00A0mple.com" became the domain "exa"). The fix
+    // generalizes to the rest of the Unicode space-separator class
+    // (U+2000-U+200A, U+3000 ideographic space, etc.), checked here too.
+    const nbsp = validateAdsTxt(OWNER + 'exa\u00A0mple.com, pub-1, DIRECT, f08c47fec0942fa0')
+    expect(nbsp.records[0].domain).toBe('example.com')
+    expect(nbsp.stats.errors).toBe(0)
+    expect(nbsp.issues.some(i => /Invalid domain/.test(i.message))).toBe(false)
+
+    const ideographic = validateAdsTxt(OWNER + 'exa\u3000mple.com, pub-1, DIRECT, f08c47fec0942fa0')
+    expect(ideographic.records[0].domain).toBe('example.com')
+    expect(ideographic.stats.errors).toBe(0)
+  })
 })
 
 describe('validateAdsTxt — record domain cleanup', () => {
