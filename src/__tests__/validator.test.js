@@ -166,6 +166,24 @@ describe('validateAdsTxt — variables', () => {
     expect(r.issues[0].lineNumber).toBe(-1)
     expect(r.issues[0].severity).toBe('error')
   })
+
+  // Regression: the "Cleaned output" panel's gutter marks a line via outputLineStatuses,
+  // which previously only ever got 'corrected' (if the text changed) or null for variable
+  // declarations — never 'error'/'warning', even when this exact line had just been pushed
+  // as an error/warning issue. Data records already derive their outputLineStatuses from the
+  // worst issue severity on the line (see validateAdsTxt's worstLineSeverity); variables were
+  // the one place that didn't, so e.g. a malformed OWNERDOMAIN showed red in the Input panel's
+  // gutter (which reads inputLineIssues) but no marker at all in the Cleaned Output gutter for
+  // the identical line.
+  it('marks a malformed OWNERDOMAIN line as an error in outputLineStatuses too, not just the issues list', () => {
+    const r = validateAdsTxt('OWNERDOMAIN=not a domain')
+    expect(r.outputLineStatuses[0]).toBe('error')
+  })
+
+  it('marks the second, conflicting OWNERDOMAIN declaration as a warning in outputLineStatuses', () => {
+    const r = validateAdsTxt('OWNERDOMAIN=a.com\nOWNERDOMAIN=b.com')
+    expect(r.outputLineStatuses[1]).toBe('warning')
+  })
 })
 
 describe('compareSnapshots', () => {

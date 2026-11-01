@@ -521,7 +521,13 @@ export function validateAdsTxt(content) {
       seenVariableLines.add(corrected)
       variables[varName] = outValue
       correctedLines.push(corrected + inlineComment)
-      outputLineStatuses.push(corrected !== body ? 'corrected' : null)
+      // Same rule records use below (worstLineSeverity ?? corrected-fallback): an error/warning
+      // already raised for this line (invalid domain value, "Multiple OWNERDOMAIN declarations",
+      // a MANAGERDOMAIN country conflict, a bad MANAGERDOMAIN country code) must win over a mere
+      // text-changed "corrected" marker, or be shown at all when the text happens not to change —
+      // otherwise the Cleaned Output panel's gutter stayed blank for a line the Issues panel (and
+      // the Input panel's own gutter, which reads inputLineIssues directly) was flagging as broken.
+      outputLineStatuses.push(inputLineIssues.get(lineNumber) ?? (corrected !== body ? 'corrected' : null))
       return
     }
 
