@@ -1050,6 +1050,42 @@ describe('App — batch check', () => {
   )
 
   it(
+    'regression: clears the stale "Failed to load" URL error when the user follows its own ' +
+      'advice and types/pastes content directly into the main editor — handleInputChange already ' +
+      'clears fileError/loadedUrl/shareError on every keystroke (so manual edits don\'t leave those ' +
+      'stale), but never cleared urlError, whose own message ends with "Try pasting the content ' +
+      'directly" — doing exactly that still left "Failed to load: ..." on screen above the new, ' +
+      'valid content',
+    async () => {
+      urlModule.fetchFromUrl.mockRejectedValueOnce(new Error('network error'))
+      render(<App />)
+      fireEvent.change(screen.getByPlaceholderText(/example\.com/), { target: { value: 'bad.example' } })
+      fireEvent.click(screen.getByRole('button', { name: 'Load' }))
+      await screen.findByText(/Failed to load/)
+
+      typeInput('a.com, pub-1, DIRECT')
+
+      expect(screen.queryByText(/Failed to load/)).toBeNull()
+    }
+  )
+
+  it(
+    'regression: the "Clear" button must also drop the stale "Failed to load" URL error, same ' +
+      'gap as handleInputChange just above',
+    async () => {
+      urlModule.fetchFromUrl.mockRejectedValueOnce(new Error('network error'))
+      render(<App />)
+      fireEvent.change(screen.getByPlaceholderText(/example\.com/), { target: { value: 'bad.example' } })
+      fireEvent.click(screen.getByRole('button', { name: 'Load' }))
+      await screen.findByText(/Failed to load/)
+
+      fireEvent.click(screen.getByRole('button', { name: 'Clear' }))
+
+      expect(screen.queryByText(/Failed to load/)).toBeNull()
+    }
+  )
+
+  it(
     'regression: a batch row\'s "Copy URL" button must announce "Copied!", not swap to a bare ' +
       "checkmark with no word at all — every other copy-confirmation button in this file " +
       '(Share, the main Copy button, the network-coverage template button, Save/Import) flips ' +

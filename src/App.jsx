@@ -200,6 +200,13 @@ export default function App() {
     // left it sitting at the top of the page for the rest of the session,
     // long after it stopped describing anything still on screen.
     setShareError(false)
+    // Fourth instance of the same gap, found right after loadText() got the
+    // matching fix for its own three programmatic-replace paths: urlError's
+    // own message literally ends with "Try pasting the content directly." —
+    // but typing/pasting into this very textarea never cleared it, so a user
+    // who did exactly what the message told them to do still saw "Failed to
+    // load: ..." sitting above their now-valid, successfully-loaded content.
+    setUrlError('')
     clearTimeout(validateTimerRef.current)
     if (!text.trim()) { setResult(null); return }
     validateTimerRef.current = setTimeout(() => setResult(validateAdsTxt(text)), 300)
@@ -861,6 +868,9 @@ export default function App() {
                   // Same gap for the share-link-decode-failed banner — see
                   // handleInputChange/loadText's comments.
                   setShareError(false)
+                  // Same gap, fourth state — see handleInputChange's comment
+                  // on urlError just above.
+                  setUrlError('')
                 }}>
                   Clear
                 </button>
