@@ -810,6 +810,32 @@ describe('App — version history', () => {
   )
 
   it(
+    'regression: two added (or removed) values for the same multi-value variable must not ' +
+      'share a React key — compareSnapshots pushes one {name, value} entry per changed value ' +
+      'for CONTACT/SUBDOMAIN/INVENTORYPARTNERDOMAIN (they may legitimately repeat across lines), ' +
+      'but VersionDiffView keyed each list item by `name` alone, which repeats across entries ' +
+      'whenever more than one value changes for the same variable in a single diff',
+    () => {
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      render(<App />)
+      fireEvent.click(screen.getByRole('button', { name: /Version history/ }))
+      typeInput('OWNERDOMAIN=a.com\nx.com, 1, DIRECT')
+      fireEvent.click(screen.getByRole('button', { name: /Save current as version/ }))
+
+      typeInput(
+        'OWNERDOMAIN=a.com\nx.com, 1, DIRECT\nSUBDOMAIN=one.example.com\nSUBDOMAIN=two.example.com'
+      )
+      fireEvent.click(screen.getByRole('button', { name: 'Compare to current' }))
+
+      expect(screen.getByText('+ SUBDOMAIN=one.example.com')).toBeTruthy()
+      expect(screen.getByText('+ SUBDOMAIN=two.example.com')).toBeTruthy()
+      expect(
+        errorSpy.mock.calls.some(args => String(args[0]).includes('same key'))
+      ).toBe(false)
+    }
+  )
+
+  it(
     'marks the Compare button as pressed for assistive tech while a comparison is open, not just via its changed label',
     () => {
       render(<App />)

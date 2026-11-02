@@ -1493,11 +1493,19 @@ function VersionDiffView({ diff }) {
         <span className="version-diff-unchanged">{unchanged} unchanged</span>
       </div>
       <div className="version-diff-list">
+        {/* key includes `value`, not just `name`: MULTI_VALUE_VARIABLES (CONTACT/
+            SUBDOMAIN/INVENTORYPARTNERDOMAIN) can add or remove several distinct
+            values for the SAME variable in one diff (see compareSnapshots's
+            per-name Set loop) — `name` alone collided across those entries,
+            giving React duplicate keys. React then matched the wrong DOM node
+            to the wrong entry across re-renders (this diff recomputes live as
+            `input` changes), so one of the two lines could keep showing a
+            stale value instead of updating. */}
         {variablesRemoved.map(({ name, value }) => (
-          <code key={`vr-${name}`} className="version-diff-line diff-row-dupe">− {name}={value}</code>
+          <code key={`vr-${name}-${value}`} className="version-diff-line diff-row-dupe">− {name}={value}</code>
         ))}
         {variablesAdded.map(({ name, value }) => (
-          <code key={`va-${name}`} className="version-diff-line diff-row-filled">+ {name}={value}</code>
+          <code key={`va-${name}-${value}`} className="version-diff-line diff-row-filled">+ {name}={value}</code>
         ))}
         {variablesChanged.map(({ name, before, after }) => (
           <code key={`vc-${name}`} className="version-diff-line diff-row-corrected">± {name}: {before} → {after}</code>
