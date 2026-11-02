@@ -33,6 +33,21 @@ afterEach(() => {
   // a local alertSpy.mockClear() in two tests, but the root cause (no
   // restore between tests) was still live for every other spy here.
   vi.restoreAllMocks()
+  // Same class of gap as the alert/confirm/prompt spies just above, for the
+  // module-level fetchFromUrl mock created by vi.mock() at the top of this
+  // file: vi.restoreAllMocks() only restores spies created via vi.spyOn()
+  // (it reinstates their ORIGINAL implementation) — a plain vi.fn(), which
+  // has no "original" to restore to, is left completely untouched, queued
+  // once-implementations and all. A test that queues a mockRejectedValueOnce()/
+  // mockResolvedValueOnce() and deliberately never consumes it (e.g. "ignores a
+  // second Enter press..." below, which asserts fetchFromUrl was called only
+  // once and leaves the second queued result unused on purpose) used to leak
+  // that queued value into whichever LATER test called fetchFromUrl() first —
+  // getting a result neither test configured, purely because of file order.
+  // This was previously patched locally, once, at the one call site that
+  // happened to trip over it (see the old comment removed from that test) —
+  // resetting here instead closes the gap for every test, present and future.
+  urlModule.fetchFromUrl.mockReset()
 })
 
 const typeInput = (text) =>
@@ -427,6 +442,23 @@ describe('App — URL loader', () => {
 
     expect(screen.getByLabelText('app-ads.txt input').value).toBe('google.com, pub-1, DIRECT')
   })
+
+  // Regression test for the leak the global afterEach's fetchFromUrl.mockReset()
+  // now prevents (see that comment): the test just above deliberately queues a
+  // mockRejectedValueOnce() it never consumes. Before that global reset existed,
+  // whichever test ran next and called fetchFromUrl() for the first time got
+  // THAT leftover rejection instead of whatever it configured itself — nothing
+  // about this test's own setup would explain the failure, since the mock here
+  // is never told to reject.
+  it('is not affected by an earlier test leaving an unconsumed queued mock result behind', async () => {
+    urlModule.fetchFromUrl.mockResolvedValue('google.com, pub-1, DIRECT')
+
+    render(<App />)
+    fireEvent.change(screen.getByPlaceholderText(/example.com/i), { target: { value: 'example.com' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Load' }))
+
+    await waitFor(() => expect(screen.getByLabelText('app-ads.txt input').value).toBe('google.com, pub-1, DIRECT'))
+  })
 })
 
 describe('App — file loading', () => {
@@ -525,13 +557,10 @@ describe('App — file loading', () => {
         FileReader.prototype.readAsText = originalReadAsText
       }
 
-      // mockReset() first: an earlier, unrelated test in this file queues a
-      // mockRejectedValueOnce() that it never actually consumes (it asserts
-      // fetchFromUrl was called only once, deliberately leaving the second
-      // queued result unused) — without clearing it here, that leftover
-      // rejection — not this test's own mockResolvedValue — is what the next
-      // fetchFromUrl() call anywhere later in the suite would get.
-      urlModule.fetchFromUrl.mockReset().mockResolvedValue('google.com, pub-1, DIRECT')
+      // No manual mockReset() needed here — the global afterEach above resets
+      // fetchFromUrl between every test (see its comment for why that was
+      // necessary: vi.restoreAllMocks() alone doesn't touch a plain vi.fn()).
+      urlModule.fetchFromUrl.mockResolvedValue('google.com, pub-1, DIRECT')
       fireEvent.change(screen.getByPlaceholderText(/example\.com/), { target: { value: 'example.com' } })
       fireEvent.click(screen.getByRole('button', { name: 'Load' }))
 
