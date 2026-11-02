@@ -98,6 +98,20 @@ describe('validateAdsTxt — records', () => {
     expect(r.stats.totalRecords).toBe(1)
   })
 
+  it(
+    'flags a dropped trailing comma (empty 4th field) as corrected, not a silent, unflagged change',
+    () => {
+      // 'foo.com' has no known cert, so the empty field after the trailing comma is dropped
+      // from the output rather than filled — the cleaned line differs from the input even
+      // though no cert/domain/relationship value itself changed.
+      const r = validateAdsTxt(OWNER + 'foo.com, 1, DIRECT,')
+      expect(r.cleanedContent.split('\n')[1]).toBe('foo.com, 1, DIRECT')
+      expect(r.outputLineStatuses[1]).toBe('corrected')
+      expect(r.changes).toHaveLength(1)
+      expect(r.changes[0].type).toBe('corrected')
+    }
+  )
+
   it('reports network coverage', () => {
     const r = validateAdsTxt(OWNER + 'google.com, pub-1, DIRECT')
     expect(r.coverage.present.map(n => n.domain)).toContain('google.com')

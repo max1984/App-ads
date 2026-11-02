@@ -719,6 +719,12 @@ export function validateAdsTxt(content) {
       parts[0] !== domain ||
       parts[2] !== relationship ||
       (parts[3] && parts[3].trim() !== certId) ||
+      // A trailing comma with nothing after it (e.g. 'foo.com, 1, DIRECT,') makes parts[3]
+      // an empty string — falsy, so the check above never runs — yet recordParts below only
+      // pushes certId when it's truthy, so the empty 4th field is silently dropped from the
+      // output. Without this clause, that dropped comma changed cleanedLine but was never
+      // flagged 'corrected' in outputLineStatuses or recorded in the Changes diff below.
+      (parts.length === 4 && !certId) ||
       parts.length > 4
     )
 
