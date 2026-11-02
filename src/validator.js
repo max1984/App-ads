@@ -447,8 +447,13 @@ export function validateAdsTxt(content) {
 
       // *DOMAIN variables must be a bare lowercase domain — strip scheme/path/case silently,
       // same as we do for record domains, and only raise an issue if it's still malformed.
+      // Note: this must run even when `value` is empty ('OWNERDOMAIN=' with nothing after
+      // the '=') — an empty value is just as malformed as any other non-domain text, but a
+      // truthiness guard here used to skip the whole block for it, silently accepting the
+      // line with zero issues raised (not even "doesn't look like a valid domain") instead
+      // of falling through to the `!domainOnly` branch below, which already handles it.
       let outValue = value
-      if (DOMAIN_VARIABLES.has(varName) && value) {
+      if (DOMAIN_VARIABLES.has(varName)) {
         // MANAGERDOMAIN may carry an optional ISO 3166-1 alpha-2 country: 'manager.com,US'.
         const [domainPart, countryPart] = varName === 'MANAGERDOMAIN' ? value.split(/,(.*)/s) : [value]
         outValue = toBareDomain(domainPart)

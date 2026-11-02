@@ -198,6 +198,21 @@ describe('validateAdsTxt — variables', () => {
     expect(lineTwoIssues.map(i => i.message)).toEqual([`OWNERDOMAIN value 'not a domain' doesn't look like a valid domain.`])
     expect(r.issues.some(i => /Multiple OWNERDOMAIN/.test(i.message))).toBe(false)
   })
+
+  // Regression: '*DOMAIN=' with nothing after the '=' used to skip the whole domain-value
+  // validation block entirely (it was guarded by `&& value`, and an empty string is falsy),
+  // so the line was accepted into `variables`/cleanedContent completely unflagged — no error,
+  // no warning, nothing — unlike every other malformed (non-empty) domain value, which does
+  // raise "doesn't look like a valid domain". This applied to all four *DOMAIN variables, not
+  // just OWNERDOMAIN (which happens to still get a — misleadingly worded — "No OWNERDOMAIN
+  // declared" warning from the unrelated end-of-file check, since '' is also falsy there).
+  it('errors on an empty value for every *DOMAIN variable, not just a non-empty malformed one', () => {
+    const r = validateAdsTxt('OWNERDOMAIN=\nSUBDOMAIN=\nMANAGERDOMAIN=\nINVENTORYPARTNERDOMAIN=\nfoo.com, 1, DIRECT')
+    expect(r.issues.some(i => i.severity === 'error' && /OWNERDOMAIN value '' doesn't look like a valid domain/.test(i.message))).toBe(true)
+    expect(r.issues.some(i => i.severity === 'error' && /SUBDOMAIN value '' doesn't look like a valid domain/.test(i.message))).toBe(true)
+    expect(r.issues.some(i => i.severity === 'error' && /MANAGERDOMAIN value '' doesn't look like a valid domain/.test(i.message))).toBe(true)
+    expect(r.issues.some(i => i.severity === 'error' && /INVENTORYPARTNERDOMAIN value '' doesn't look like a valid domain/.test(i.message))).toBe(true)
+  })
 })
 
 describe('compareSnapshots', () => {
