@@ -1021,6 +1021,35 @@ describe('App — batch check', () => {
   )
 
   it(
+    'regression: clears the stale "Failed to load" URL error when a batch result is loaded ' +
+      'instead — loadText() (the shared path for Restore version and batch "Load") already ' +
+      'clears fileError/loadedUrl/shareError on every path that replaces the editor content, but ' +
+      'urlError was only ever cleared by handleLoadUrl itself, so failing a direct URL load and ' +
+      'then loading a batch-checked URL\'s content left the old "Failed to load: ..." message on ' +
+      'screen under the new, successfully-loaded content',
+    async () => {
+      urlModule.fetchFromUrl.mockRejectedValueOnce(new Error('network error'))
+      render(<App />)
+      fireEvent.change(screen.getByPlaceholderText(/example\.com/), { target: { value: 'bad.example' } })
+      fireEvent.click(screen.getByRole('button', { name: 'Load' }))
+      await screen.findByText(/Failed to load/)
+
+      urlModule.fetchFromUrl.mockResolvedValueOnce('google.com, pub-1, DIRECT')
+      fireEvent.click(screen.getByRole('button', { name: /Batch URL check/ }))
+      fireEvent.change(screen.getByLabelText('URLs to check, one per line'), {
+        target: { value: 'a.com' },
+      })
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Check all URLs' }))
+      })
+
+      fireEvent.click(document.querySelector('.batch-load-btn'))
+
+      expect(screen.queryByText(/Failed to load/)).toBeNull()
+    }
+  )
+
+  it(
     'regression: a batch row\'s "Copy URL" button must announce "Copied!", not swap to a bare ' +
       "checkmark with no word at all — every other copy-confirmation button in this file " +
       '(Share, the main Copy button, the network-coverage template button, Save/Import) flips ' +

@@ -235,6 +235,14 @@ export default function App() {
     // See handleInputChange's comment above: the share-link-decode-failed
     // banner needs clearing here too, same shared-path gap.
     setShareError(false)
+    // Fourth instance of the same gap: urlError is set by handleLoadUrl on a
+    // failed fetch and, unlike fileError/loadedUrl/shareError above, was never
+    // cleared by this shared function — only by handleLoadUrl's own retry (and
+    // only on that retry's start, not on success elsewhere). Failing a URL
+    // load, then loading valid content a different way (batch "Load", Restore
+    // version, Import) left "Failed to load: ... Try pasting the content
+    // directly." on screen under the now-valid, successfully-loaded content.
+    setUrlError('')
   }, [])
 
   const loadFile = useCallback((file) => {
