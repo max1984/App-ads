@@ -275,6 +275,31 @@ describe('compareSnapshots', () => {
     expect(d.variablesAdded).toEqual([{ name: 'MANAGERDOMAIN (DE)', value: 'de.com' }])
     expect(d.variablesChanged).toHaveLength(0)
   })
+
+  it('detects a removed SUBDOMAIN line even when another SUBDOMAIN line is unchanged', () => {
+    // variables.SUBDOMAIN (flat, last-wins) is 'b.example.com' in both snapshots here —
+    // same bug class as the MANAGERDOMAIN case above, but for a variable the spec allows
+    // to repeat without a per-line key (unlike MANAGERDOMAIN's country) — a diff based on
+    // that alone would miss that the 'a.example.com' line was removed entirely.
+    const before = 'SUBDOMAIN=a.example.com\nSUBDOMAIN=b.example.com\nfoo.com, 1, DIRECT'
+    const after = 'SUBDOMAIN=b.example.com\nfoo.com, 1, DIRECT'
+    const d = compareSnapshots(before, after)
+    expect(d.variablesRemoved).toEqual([{ name: 'SUBDOMAIN', value: 'a.example.com' }])
+    expect(d.variablesAdded).toHaveLength(0)
+    expect(d.variablesChanged).toHaveLength(0)
+  })
+
+  it('reports an added CONTACT line as added, not as a misleading change to the existing one', () => {
+    // Adding a second CONTACT line while keeping the first changes variables.CONTACT
+    // (last-wins) from the first value to the second, which looks exactly like the first
+    // one was replaced — even though it's still present, untouched, in the new file.
+    const before = 'CONTACT=adops@example.com\nfoo.com, 1, DIRECT'
+    const after = 'CONTACT=adops@example.com\nCONTACT=sales@example.com\nfoo.com, 1, DIRECT'
+    const d = compareSnapshots(before, after)
+    expect(d.variablesAdded).toEqual([{ name: 'CONTACT', value: 'sales@example.com' }])
+    expect(d.variablesRemoved).toHaveLength(0)
+    expect(d.variablesChanged).toHaveLength(0)
+  })
 })
 
 describe('formatRecordLine', () => {

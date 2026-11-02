@@ -8,6 +8,14 @@ const SUPPORTED_VARIABLES = new Set([
 // These variables must hold a bare domain per the IAB spec (CONTACT may be an email/URL, so it's excluded).
 const DOMAIN_VARIABLES = new Set(['SUBDOMAIN', 'INVENTORYPARTNERDOMAIN', 'OWNERDOMAIN', 'MANAGERDOMAIN'])
 
+// Per IAB spec, CONTACT/SUBDOMAIN/INVENTORYPARTNERDOMAIN may legitimately appear on
+// multiple lines (confirmed via spec lookup for SUBDOMAIN/INVENTORYPARTNERDOMAIN; CONTACT
+// explicitly supports several contact methods) — unlike OWNERDOMAIN (single value) and
+// MANAGERDOMAIN (one per country, already tracked separately via managerDomainsByCountry).
+// `variables[varName]` below only ever keeps whichever line was parsed LAST, so these three
+// need their own list to avoid silently losing every other line's value.
+const MULTI_VALUE_VARIABLES = new Set(['CONTACT', 'SUBDOMAIN', 'INVENTORYPARTNERDOMAIN'])
+
 export const TOP_NETWORKS = [
   { domain: 'google.com',         name: 'Google (Authorized Buyers)' },
   { domain: 'appnexus.com',       name: 'AppNexus / Xandr' },
@@ -388,6 +396,10 @@ export function validateAdsTxt(content) {
   const records = []
   const changes = []   // before → after for every transformed line
   const variables = {}
+  // See MULTI_VALUE_VARIABLES above — every distinct value seen for CONTACT/SUBDOMAIN/
+  // INVENTORYPARTNERDOMAIN, in order, so compareSnapshots can diff them as a set instead
+  // of comparing only the last-parsed line's value (which `variables` holds).
+  const multiValues = { CONTACT: [], SUBDOMAIN: [], INVENTORYPARTNERDOMAIN: [] }
   let totalRecords = 0
   let keptRecords = 0
   let duplicatesRemoved = 0
@@ -533,6 +545,7 @@ export function validateAdsTxt(content) {
       }
       seenVariableLines.add(corrected)
       variables[varName] = outValue
+      if (MULTI_VALUE_VARIABLES.has(varName)) multiValues[varName].push(outValue)
       correctedLines.push(corrected + inlineComment)
       // Same rule records use below (worstLineSeverity ?? corrected-fallback): an error/warning
       // already raised for this line (invalid domain value, "Multiple OWNERDOMAIN declarations",
@@ -786,6 +799,9 @@ export function validateAdsTxt(content) {
     // the full per-country picture to diff MANAGERDOMAIN correctly instead of comparing that
     // single last-wins string.
     managerDomainsByCountry: Object.fromEntries(seenManagerDomains),
+    // See MULTI_VALUE_VARIABLES above — same reasoning as managerDomainsByCountry, for
+    // CONTACT/SUBDOMAIN/INVENTORYPARTNERDOMAIN, which may also legitimately repeat.
+    multiValues,
     stats: {
       totalRecords,
       keptRecords,
@@ -824,14 +840,15 @@ export function compareSnapshots(oldContent, newContent) {
     if (!newMap.has(key)) removed.push(r)
   }
 
-  // MANAGERDOMAIN is excluded here and diffed separately below — oldResult.variables.
-  // MANAGERDOMAIN/newResult.variables.MANAGERDOMAIN only hold whichever line was parsed
-  // LAST (see validateAdsTxt), so a file with both a global and per-country MANAGERDOMAIN
-  // lines would compare only the last one here, silently missing a real edit to any
-  // other country's line (or reporting a change that didn't actually happen, if the
-  // last-parsed line is unrelated to the one that changed).
+  // MANAGERDOMAIN and MULTI_VALUE_VARIABLES (CONTACT/SUBDOMAIN/INVENTORYPARTNERDOMAIN) are
+  // excluded here and diffed separately below — oldResult.variables.MANAGERDOMAIN/
+  // oldResult.variables.CONTACT etc. only hold whichever line was parsed LAST (see
+  // validateAdsTxt), so a file with several lines for one of these would compare only the
+  // last one here, silently missing a real edit to any earlier line (or reporting a change
+  // that didn't actually happen, if the last-parsed line is unrelated to the one that changed).
   const varNames = new Set([...Object.keys(oldResult.variables), ...Object.keys(newResult.variables)])
   varNames.delete('MANAGERDOMAIN')
+  for (const name of MULTI_VALUE_VARIABLES) varNames.delete(name)
   const variablesAdded = [], variablesRemoved = [], variablesChanged = []
   for (const name of varNames) {
     const before = oldResult.variables[name]
@@ -852,6 +869,17 @@ export function compareSnapshots(oldContent, newContent) {
     if (before === undefined && after !== undefined) variablesAdded.push({ name, value: after })
     else if (before !== undefined && after === undefined) variablesRemoved.push({ name, value: before })
     else if (before !== after) variablesChanged.push({ name, before, after })
+  }
+
+  // CONTACT/SUBDOMAIN/INVENTORYPARTNERDOMAIN can have several independent lines at once
+  // (unlike MANAGERDOMAIN, there's no natural per-line key to pair an old value with a new
+  // one), so each is diffed as a set: a value present in only one snapshot is reported as
+  // added/removed, never as a misleading "changed from X to Y" when X is still there.
+  for (const name of MULTI_VALUE_VARIABLES) {
+    const before = new Set(oldResult.multiValues[name])
+    const after = new Set(newResult.multiValues[name])
+    for (const value of after) if (!before.has(value)) variablesAdded.push({ name, value })
+    for (const value of before) if (!after.has(value)) variablesRemoved.push({ name, value })
   }
 
   return {
