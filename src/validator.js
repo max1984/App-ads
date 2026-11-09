@@ -657,6 +657,14 @@ export function validateAdsTxt(content) {
       const guess = lower.includes('indirect') || lower.includes('resell')
         ? 'RESELLER'
         : lower.includes('direct') ? 'DIRECT' : null
+      // A missing comma between relationship and cert ID (e.g. real publisher data seen
+      // in the wild: 'smaato.com, 123, RESELLER 07bcf65f187117b4') packs a real, recoverable
+      // cert ID into this same malformed field. Without extracting it, the suggestion below
+      // used only `certId` (sourced from a separate parts[3], which doesn't exist on a line
+      // like this) and silently dropped a cert ID the file clearly had, instead of carrying
+      // it over like the sibling cert-mismatch suggestion a few lines below already does.
+      const embeddedCert = parts[2].split(/\s+/).find(t => /^[0-9a-f]{16}$/i.test(t))
+      const suggestedCert = certId || (embeddedCert ? embeddedCert.toLowerCase() : '')
       lineIssues.push({
         severity: 'error', lineNumber,
         message: `Invalid relationship '${relationship}' — must be DIRECT or RESELLER.`,
@@ -668,7 +676,7 @@ export function validateAdsTxt(content) {
         // data after a ';' or inline '#' comment that line had, instead of just
         // fixing the relationship field.
         suggestion: guess
-          ? `Change to: ${domain}, ${publisherIdRaw}, ${guess}${certId ? ', ' + certId : ''}${extensionData}${inlineComment}`
+          ? `Change to: ${domain}, ${publisherIdRaw}, ${guess}${suggestedCert ? ', ' + suggestedCert : ''}${extensionData}${inlineComment}`
           : `Replace '${parts[2]}' with either DIRECT or RESELLER.`
       })
     } else {

@@ -70,6 +70,17 @@ describe('validateAdsTxt — records', () => {
     }
   )
 
+  it(
+    'regression: a missing comma between relationship and cert ID (real publisher typo, ' +
+      'e.g. "RESELLER 07bcf65f187117b4" as one field) must recover the cert ID into the ' +
+      'suggestion instead of silently dropping it',
+    () => {
+      const r = validateAdsTxt(OWNER + 'smaato.com, 1100052485, RESELLER 07bcf65f187117b4')
+      const err = r.issues.find(i => i.severity === 'error')
+      expect(err.suggestion).toBe('Change to: smaato.com, 1100052485, RESELLER, 07bcf65f187117b4')
+    }
+  )
+
   it('flags too few fields', () => {
     const r = validateAdsTxt(OWNER + 'foo.com, 1')
     expect(r.stats.errors).toBe(1)
