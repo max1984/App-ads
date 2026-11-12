@@ -56,18 +56,37 @@ describe('fetchFromUrl', () => {
     expect(f).toHaveBeenCalledTimes(1)
   })
 
-  it('falls back to the proxy when the direct fetch fails at network level', async () => {
+  it('falls back to the first proxy when the direct fetch fails at network level', async () => {
     const f = vi.fn()
       .mockRejectedValueOnce(new TypeError('Failed to fetch'))
       .mockResolvedValueOnce(response(200, 'a.com, 1, DIRECT'))
     await expect(fetchFromUrl('https://x.com/app-ads.txt', f)).resolves.toBe('a.com, 1, DIRECT')
-    expect(f.mock.calls[1][0]).toMatch(/allorigins/)
+    expect(f.mock.calls[1][0]).toMatch(/corsfix/)
   })
 
-  it('reports a 404 without hitting the proxy', async () => {
+  it('tries the next proxy when an earlier one fails — one flaky proxy must not sink the whole feature', async () => {
+    const f = vi.fn()
+      .mockRejectedValueOnce(new TypeError('Failed to fetch')) // direct
+      .mockResolvedValueOnce(response(502)) // first proxy down
+      .mockResolvedValueOnce(response(200, 'a.com, 1, DIRECT')) // second proxy up
+    await expect(fetchFromUrl('https://x.com/app-ads.txt', f)).resolves.toBe('a.com, 1, DIRECT')
+    expect(f).toHaveBeenCalledTimes(3)
+    expect(f.mock.calls[1][0]).toMatch(/corsfix/)
+    expect(f.mock.calls[2][0]).toMatch(/allorigins/)
+  })
+
+  it('reports a 404 without hitting any proxy', async () => {
     const f = vi.fn().mockResolvedValue(response(404))
     await expect(fetchFromUrl('https://x.com/app-ads.txt', f)).rejects.toThrow('file not found (HTTP 404)')
     expect(f).toHaveBeenCalledTimes(1)
+  })
+
+  it('treats a 404 forwarded by the first proxy as authoritative and does not try the next one', async () => {
+    const f = vi.fn()
+      .mockRejectedValueOnce(new TypeError('Failed to fetch')) // direct
+      .mockResolvedValueOnce(response(404)) // first proxy forwards the target's real 404
+    await expect(fetchFromUrl('https://x.com/app-ads.txt', f)).rejects.toThrow('file not found (HTTP 404)')
+    expect(f).toHaveBeenCalledTimes(2)
   })
 
   it('rejects HTML soft-404 pages', async () => {
@@ -75,8 +94,9 @@ describe('fetchFromUrl', () => {
     await expect(fetchFromUrl('https://x.com/app-ads.txt', f)).rejects.toThrow(/HTML page/)
   })
 
-  it('gives a readable message when both attempts fail at network level', async () => {
+  it('gives a readable message when the direct fetch and every proxy fail at network level', async () => {
     const f = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'))
     await expect(fetchFromUrl('https://x.com/app-ads.txt', f)).rejects.toThrow('network error or blocked by CORS')
+    expect(f).toHaveBeenCalledTimes(3) // direct + both proxies
   })
 })

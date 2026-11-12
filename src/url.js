@@ -48,19 +48,42 @@ async function fetchText(fetchImpl, url, timeoutMs) {
   return res.text()
 }
 
-// Tries a direct fetch first, then a CORS proxy (most publisher sites don't send CORS headers).
+// Free public CORS proxies are individually unreliable (observed: the sole proxy this
+// used to call, allorigins, intermittently times out, 500s, or omits CORS headers on an
+// otherwise-200 response — roughly 4 out of 5 attempts in one spot check). Relying on a
+// single one meant its outages took down "Load from URL" for every site that doesn't
+// send its own CORS headers (most publishers' app-ads.txt, since it's a plain static
+// file). Trying a short, ordered chain means one proxy's bad day doesn't sink the feature.
+const CORS_PROXIES = [
+  (url) => `https://proxy.corsfix.com/?${url}`,
+  (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+]
+
+// Tries a direct fetch first, then each CORS proxy in turn (most publisher sites don't
+// send CORS headers).
 export async function fetchFromUrl(url, fetchImpl = fetch) {
   let text
   try {
     text = await fetchText(fetchImpl, url, 6000)
   } catch (directErr) {
-    // A real HTTP status from the server is authoritative — the proxy would only repeat it.
+    // A real HTTP status from the server is authoritative — a proxy would only repeat it.
     if (directErr.status) throw directErr
-    try {
-      text = await fetchText(fetchImpl, `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`, 10000)
-    } catch (proxyErr) {
-      if (proxyErr.status) throw proxyErr
-      throw new Error(proxyErr.name === 'TimeoutError' ? 'request timed out' : 'network error or blocked by CORS')
+    let lastErr = directErr
+    let gotText = false
+    for (const buildProxyUrl of CORS_PROXIES) {
+      try {
+        text = await fetchText(fetchImpl, buildProxyUrl(url), 10000)
+        gotText = true
+        break
+      } catch (proxyErr) {
+        // A genuine 404 forwarded from the target is authoritative — trying the next
+        // proxy wouldn't make the file exist, it would just waste another round trip.
+        if (proxyErr.status === 404) throw proxyErr
+        lastErr = proxyErr
+      }
+    }
+    if (!gotText) {
+      throw new Error(lastErr.name === 'TimeoutError' ? 'request timed out' : 'network error or blocked by CORS')
     }
   }
   if (looksLikeHtml(text)) {
