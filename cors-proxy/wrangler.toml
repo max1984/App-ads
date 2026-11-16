@@ -1,0 +1,3 @@
+name = "app-ads-cors-proxy"
+main = "worker.js"
+compatibility_date = "2026-11-16"

@@ -61,18 +61,20 @@ describe('fetchFromUrl', () => {
       .mockRejectedValueOnce(new TypeError('Failed to fetch'))
       .mockResolvedValueOnce(response(200, 'a.com, 1, DIRECT'))
     await expect(fetchFromUrl('https://x.com/app-ads.txt', f)).resolves.toBe('a.com, 1, DIRECT')
-    expect(f.mock.calls[1][0]).toMatch(/corsfix/)
+    expect(f.mock.calls[1][0]).toMatch(/workers\.dev/)
   })
 
   it('tries the next proxy when an earlier one fails — one flaky proxy must not sink the whole feature', async () => {
     const f = vi.fn()
       .mockRejectedValueOnce(new TypeError('Failed to fetch')) // direct
-      .mockResolvedValueOnce(response(502)) // first proxy down
-      .mockResolvedValueOnce(response(200, 'a.com, 1, DIRECT')) // second proxy up
+      .mockResolvedValueOnce(response(502)) // first proxy (own worker) down
+      .mockResolvedValueOnce(response(502)) // second proxy (corsfix) down
+      .mockResolvedValueOnce(response(200, 'a.com, 1, DIRECT')) // third proxy (allorigins) up
     await expect(fetchFromUrl('https://x.com/app-ads.txt', f)).resolves.toBe('a.com, 1, DIRECT')
-    expect(f).toHaveBeenCalledTimes(3)
-    expect(f.mock.calls[1][0]).toMatch(/corsfix/)
-    expect(f.mock.calls[2][0]).toMatch(/allorigins/)
+    expect(f).toHaveBeenCalledTimes(4)
+    expect(f.mock.calls[1][0]).toMatch(/workers\.dev/)
+    expect(f.mock.calls[2][0]).toMatch(/corsfix/)
+    expect(f.mock.calls[3][0]).toMatch(/allorigins/)
   })
 
   it('reports a 404 without hitting any proxy', async () => {
@@ -97,6 +99,6 @@ describe('fetchFromUrl', () => {
   it('gives a readable message when the direct fetch and every proxy fail at network level', async () => {
     const f = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'))
     await expect(fetchFromUrl('https://x.com/app-ads.txt', f)).rejects.toThrow('network error or blocked by CORS')
-    expect(f).toHaveBeenCalledTimes(3) // direct + both proxies
+    expect(f).toHaveBeenCalledTimes(4) // direct + all three proxies
   })
 })

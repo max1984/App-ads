@@ -48,13 +48,18 @@ async function fetchText(fetchImpl, url, timeoutMs) {
   return res.text()
 }
 
-// Free public CORS proxies are individually unreliable (observed: the sole proxy this
-// used to call, allorigins, intermittently times out, 500s, or omits CORS headers on an
-// otherwise-200 response — roughly 4 out of 5 attempts in one spot check). Relying on a
-// single one meant its outages took down "Load from URL" for every site that doesn't
-// send its own CORS headers (most publishers' app-ads.txt, since it's a plain static
-// file). Trying a short, ordered chain means one proxy's bad day doesn't sink the feature.
+// Free public CORS proxies are individually unreliable (observed: allorigins
+// intermittently times out, 500s, or omits CORS headers on an otherwise-200 response —
+// and later became reliably down entirely across multiple spot checks days apart;
+// corsfix requires registering this site's exact domain in its dashboard, so it 403s
+// in production even though it works from localhost). Relying on either alone meant
+// their outages took down "Load from URL" for every site that doesn't send its own
+// CORS headers (most publishers' app-ads.txt, since it's a plain static file). The
+// first entry is a small proxy Worker on the repo owner's own Cloudflare account
+// (cors-proxy/worker.js) — self-hosted so it isn't at the mercy of a third party's
+// uptime; the other two stay as free extra fallbacks in case it's ever down too.
 const CORS_PROXIES = [
+  (url) => `https://app-ads-cors-proxy.bartlomiej-derda.workers.dev/?url=${encodeURIComponent(url)}`,
   (url) => `https://proxy.corsfix.com/?${url}`,
   (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
 ]
