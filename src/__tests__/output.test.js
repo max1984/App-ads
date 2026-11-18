@@ -49,4 +49,20 @@ describe('sortRecordsForExport', () => {
     sortRecordsForExport(records)
     expect(records).toEqual(original)
   })
+
+  // Regression: validator.js's dedup key (recordKey) does not include
+  // extensionData, so two records sharing domain+publisherId+relationship+
+  // certId but with different trailing `;`-extension data both survive as
+  // distinct records. Without comparing `extensions` too, this tie fell
+  // back to original file order — disagreeing with sortCleanedOutput's
+  // full-line sort whenever that order put the alphabetically later
+  // extension first, exactly like this case.
+  it('breaks ties on identical domain/publisherId/relationship/certId by extensions', () => {
+    const records = [
+      { domain: 'google.com', publisherId: 'pub-1', relationship: 'DIRECT', certId: 'abc', extensions: ';tag=2' },
+      { domain: 'google.com', publisherId: 'pub-1', relationship: 'DIRECT', certId: 'abc', extensions: ';tag=1' },
+    ]
+    const sorted = sortRecordsForExport(records)
+    expect(sorted.map(r => r.extensions)).toEqual([';tag=1', ';tag=2'])
+  })
 })

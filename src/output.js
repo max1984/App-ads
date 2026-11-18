@@ -25,15 +25,27 @@ export function sortCleanedOutput(content, statuses = []) {
 // could (and for any publisher with multiple records per domain, would)
 // disagree with the full-line order shown on screen.
 // Field order here must match recordParts in validator.js's validateAdsTxt
-// (domain, publisherId, relationship, certId) — that's the order cleanedLine
-// joins them in, which is what sortCleanedOutput's full-line sort actually
-// compares. If a field is ever added there, add it here too, in the same
-// position, or this falls back out of sync with it again.
+// (domain, publisherId, relationship, certId), PLUS extensionData (the
+// `;`-delimited trailing part of the line, carried on each record as
+// `extensions`) — that's the order cleanedLine joins/appends them in,
+// which is what sortCleanedOutput's full-line sort actually compares.
+// validator.js's dedup key (recordKey) does NOT include extensionData, so
+// two records can legitimately share domain+publisherId+relationship+cert
+// and still both survive with different extensions — exactly the tie this
+// field exists to break. If a field is ever added there, add it here too,
+// in the same position, or this falls back out of sync with it again.
+//
+// Inline comments (e.g. "# note") are appended after extensionData in
+// cleanedLine but are never stored on the record object, so two records
+// tied on every field above but differing only by inline comment can still
+// disagree with sortCleanedOutput's order — an accepted, currently
+// unreachable-in-practice gap (comments aren't exported to JSON at all).
 export function sortRecordsForExport(records) {
   return [...records].sort((a, b) =>
     a.domain.localeCompare(b.domain) ||
     a.publisherId.localeCompare(b.publisherId) ||
     a.relationship.localeCompare(b.relationship) ||
-    (a.certId || '').localeCompare(b.certId || '')
+    (a.certId || '').localeCompare(b.certId || '') ||
+    (a.extensions || '').localeCompare(b.extensions || '')
   )
 }
