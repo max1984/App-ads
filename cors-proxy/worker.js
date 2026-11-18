@@ -11,6 +11,14 @@ const CORS_HEADERS = {
 }
 
 const MAX_BODY_BYTES = 5 * 1024 * 1024
+const MAX_REDIRECTS = 5
+
+function isAllowedAppAdsUrl(url) {
+  return (
+    (url.protocol === 'https:' || url.protocol === 'http:') &&
+    /\/app-ads\.txt$/i.test(url.pathname)
+  )
+}
 
 export default {
   async fetch(request) {
@@ -22,28 +30,49 @@ export default {
     const target = new URL(request.url).searchParams.get('url')
     if (!target) return new Response('Missing url param', { status: 400, headers: CORS_HEADERS })
 
-    let targetUrl
+    let currentUrl
     try {
-      targetUrl = new URL(target)
+      currentUrl = new URL(target)
     } catch {
       return new Response('Invalid url', { status: 400, headers: CORS_HEADERS })
     }
-    if (targetUrl.protocol !== 'https:' && targetUrl.protocol !== 'http:') {
-      return new Response('Only http/https allowed', { status: 400, headers: CORS_HEADERS })
-    }
-    if (!/\/app-ads\.txt$/i.test(targetUrl.pathname)) {
-      return new Response('Only app-ads.txt paths allowed', { status: 400, headers: CORS_HEADERS })
+    if (!isAllowedAppAdsUrl(currentUrl)) {
+      return new Response('Only http/https app-ads.txt paths allowed', { status: 400, headers: CORS_HEADERS })
     }
 
+    // Redirects are followed manually (not via `redirect: 'follow'`) so each hop can be
+    // re-validated against the same allowlist — otherwise an upstream could redirect this
+    // proxy to an arbitrary, unscoped URL and it would fetch and return it, defeating the
+    // path restriction above and turning this into a generic open proxy.
     let upstream
-    try {
-      upstream = await fetch(targetUrl.toString(), {
-        redirect: 'follow',
-        signal: AbortSignal.timeout(8000),
-        headers: { 'User-Agent': 'app-ads-validator-proxy/1.0' },
-      })
-    } catch (err) {
-      return new Response(`Upstream fetch failed: ${err.message}`, { status: 502, headers: CORS_HEADERS })
+    for (let hop = 0; ; hop++) {
+      try {
+        upstream = await fetch(currentUrl.toString(), {
+          redirect: 'manual',
+          signal: AbortSignal.timeout(8000),
+          headers: { 'User-Agent': 'app-ads-validator-proxy/1.0' },
+        })
+      } catch (err) {
+        return new Response(`Upstream fetch failed: ${err.message}`, { status: 502, headers: CORS_HEADERS })
+      }
+
+      const location = upstream.headers.get('location')
+      const isRedirect = upstream.status >= 300 && upstream.status < 400 && location
+      if (!isRedirect) break
+
+      if (hop >= MAX_REDIRECTS) {
+        return new Response('Too many redirects', { status: 502, headers: CORS_HEADERS })
+      }
+      let nextUrl
+      try {
+        nextUrl = new URL(location, currentUrl)
+      } catch {
+        return new Response('Invalid redirect location', { status: 502, headers: CORS_HEADERS })
+      }
+      if (!isAllowedAppAdsUrl(nextUrl)) {
+        return new Response('Redirect target not allowed', { status: 502, headers: CORS_HEADERS })
+      }
+      currentUrl = nextUrl
     }
 
     const lengthHeader = upstream.headers.get('content-length')
