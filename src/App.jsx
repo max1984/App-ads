@@ -961,7 +961,13 @@ export default function App() {
             )}
 
             {result && (
-              <div className="panel-footer stats-row">
+              // aria-live: validation re-runs on a 300ms debounce as the user types
+              // (see runValidation/handleInputChange), so sighted users see this row
+              // update instantly but a screen reader got no signal at all that
+              // results changed or even first appeared — every other transient
+              // confirmation in this file (Copy/Save/Share button text) already
+              // uses aria-live="polite" for the same reason.
+              <div className="panel-footer stats-row" role="status" aria-live="polite">
                 {health && (
                   // aria-label spells out what the bare "A"/"92" visual text can't:
                   // a title tooltip isn't reliably announced by screen readers and

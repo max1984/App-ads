@@ -73,6 +73,19 @@ describe('App', () => {
   })
 
   it(
+    'announces the validation stats row to screen readers via aria-live, since it ' +
+      'updates on a 300ms debounce as the user types and sighted users get no other cue',
+    () => {
+      render(<App />)
+      typeInput('OWNERDOMAIN=example.com\nGoogle.com, pub-1, direct')
+      fireEvent.click(screen.getByRole('button', { name: /Validate/ }))
+      const statsRow = screen.getByRole('status')
+      expect(statsRow.getAttribute('aria-live')).toBe('polite')
+      expect(statsRow.textContent).toContain('records')
+    }
+  )
+
+  it(
     'defers revoking the download blob URL instead of revoking it synchronously ' +
       "right after the click — some browsers read the blob asynchronously, so an " +
       'immediate revoke can race the read and silently abort the download',
