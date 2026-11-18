@@ -118,6 +118,7 @@ export default function App() {
   const inputEditorRef = useRef()
   const validateTimerRef = useRef()
   const batchGenRef = useRef(0)  // BUG-06 FIX: generation counter for race condition
+  const fileLoadGenRef = useRef(0)  // generation counter for loadFile()'s FileReader race
   const shareStatusTimerRef = useRef()
   const copiedNetworkTimerRef = useRef()
   const savedFlashTimerRef = useRef()
@@ -255,8 +256,20 @@ export default function App() {
   const loadFile = useCallback((file) => {
     if (!file) return
     setFileError('')
+    // Generation guard — same race class as handleBatchCheck's batchGenRef.
+    // Dropping/selecting a second file while the first one's (async)
+    // FileReader.readAsText() is still pending starts a second, fully
+    // concurrent read with no ordering guarantee: whichever resolves LAST
+    // wins and overwrites the editor, even if it was the earlier, now-stale
+    // read racing against a file the user dropped more recently (plausible
+    // whenever the two files differ enough in size for the reads to finish
+    // out of drop order).
+    const generation = ++fileLoadGenRef.current
     const reader = new FileReader()
-    reader.onload = (e) => loadText(e.target.result)
+    reader.onload = (e) => {
+      if (fileLoadGenRef.current !== generation) return
+      loadText(e.target.result)
+    }
     // Without this, a failed read (permission error, the file being removed/
     // unmounted between picking it and the read completing, a dropped item
     // that looks like a file but isn't one FileReader can actually read) left
@@ -264,9 +277,10 @@ export default function App() {
     // file" button would look like it silently did nothing, exactly the
     // "operation fails without telling the user" class already fixed
     // elsewhere for handleLoadUrl's fetch failures (see urlError above).
-    reader.onerror = () => setFileError(
-      `Failed to read ${file.name}: ${reader.error?.message || 'unknown error'}.`
-    )
+    reader.onerror = () => {
+      if (fileLoadGenRef.current !== generation) return
+      setFileError(`Failed to read ${file.name}: ${reader.error?.message || 'unknown error'}.`)
+    }
     reader.readAsText(file, 'utf-8')
   }, [loadText])
 

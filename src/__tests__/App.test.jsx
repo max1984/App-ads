@@ -538,6 +538,40 @@ describe('App — file loading', () => {
   )
 
   it(
+    'keeps the last file dropped/selected even when its read resolves before an earlier one',
+    async () => {
+      // loadFile() had no generation guard — two FileReader reads in flight at
+      // once (a second file dropped/selected while the first file's async
+      // readAsText() is still pending) raced with no ordering guarantee:
+      // whichever onload fired LAST won, even when that was the EARLIER
+      // file's read finishing after the later, now-stale one.
+      const pending = []
+      const originalReadAsText = FileReader.prototype.readAsText
+      FileReader.prototype.readAsText = function () { pending.push(this) }
+      try {
+        render(<App />)
+        const fileInput = document.querySelector('input[type="file"][accept=".txt,text/plain"]')
+
+        const first = new File(['first.com, pub-1, DIRECT'], 'first.txt', { type: 'text/plain' })
+        fireEvent.change(fileInput, { target: { files: [first] } })
+        const second = new File(['second.com, pub-2, DIRECT'], 'second.txt', { type: 'text/plain' })
+        fireEvent.change(fileInput, { target: { files: [second] } })
+
+        expect(pending).toHaveLength(2)
+        // Resolve the SECOND (later) drop's read first, then the first/earlier
+        // one — the out-of-order completion a race condition actually needs.
+        pending[1].onload({ target: { result: 'second.com, pub-2, DIRECT' } })
+        pending[0].onload({ target: { result: 'first.com, pub-1, DIRECT' } })
+
+        await waitFor(() => expect(screen.getByLabelText('app-ads.txt input').value)
+          .toBe('second.com, pub-2, DIRECT'))
+      } finally {
+        FileReader.prototype.readAsText = originalReadAsText
+      }
+    }
+  )
+
+  it(
     'clears the stale file-read error when a URL load replaces the input, not just via Clear',
     async () => {
       // Same gap as the "typing over it by hand" case just above, but for
