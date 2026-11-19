@@ -35,7 +35,20 @@ export function normalizeAdsTxtUrl(input) {
 // Many hosts answer a missing /app-ads.txt with their HTML homepage and a 200 status
 // (soft 404). Validating that would bury the user in hundreds of bogus errors.
 export function looksLikeHtml(text) {
-  return /^\s*(<!doctype html|<html[\s>]|<head[\s>]|<body[\s>])/i.test(text)
+  let s = String(text)
+  // Some caching layers prepend a debug/timing HTML comment before the doctype (e.g.
+  // WordPress's W3 Total Cache: "<!-- Performance optimized by W3 Total Cache... -->"),
+  // which otherwise defeats the anchored check below on an extremely common soft-404
+  // source. Strip a bounded number of leading comments first; the loop cap avoids any
+  // backtracking cost on pathological input instead of relying on a single regex for it.
+  for (let i = 0; i < 20; i++) {
+    s = s.replace(/^\s+/, '')
+    if (!s.startsWith('<!--')) break
+    const end = s.indexOf('-->')
+    if (end === -1) break
+    s = s.slice(end + 3)
+  }
+  return /^(<!doctype html|<html[\s>]|<head[\s>]|<body[\s>])/i.test(s)
 }
 
 async function fetchText(fetchImpl, url, timeoutMs) {

@@ -47,6 +47,23 @@ describe('looksLikeHtml', () => {
     expect(looksLikeHtml('<html lang="en">')).toBe(true)
     expect(looksLikeHtml('google.com, pub-1, DIRECT')).toBe(false)
   })
+
+  it(
+    'still detects HTML behind a leading cache/timing comment — some CDNs and WordPress ' +
+      'caching plugins (e.g. W3 Total Cache) prepend one before the doctype on every page, ' +
+      'including the homepage served as a soft 404',
+    () => {
+      expect(looksLikeHtml('<!-- Performance optimized by W3 Total Cache -->\n<!DOCTYPE html><html></html>')).toBe(
+        true
+      )
+      expect(looksLikeHtml('<!-- a --><!-- b -->\n<html lang="en">')).toBe(true)
+    }
+  )
+
+  it('does not hang or misfire on an unterminated leading comment', () => {
+    expect(looksLikeHtml('<!-- never closes <!DOCTYPE html>')).toBe(false)
+    expect(looksLikeHtml('google.com, pub-1, DIRECT')).toBe(false)
+  })
 })
 
 describe('fetchFromUrl', () => {
