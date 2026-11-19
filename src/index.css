@@ -23,20 +23,25 @@
   --font: 'Inter', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
 
-  /* Severity colours */
-  --error-color: #dc2626;
+  /* Severity colours. The *-color values are deliberately darker than a
+     naive "medium" swatch would suggest: at the ~11-13px sizes these are
+     actually rendered at (gutter markers, badges, stat counts), anything
+     lighter fails WCAG AA's 4.5:1 text contrast against the matching
+     *-bg chip — verified with the relative-luminance formula from
+     https://www.w3.org/TR/WCAG21/#dfn-contrast-ratio. */
+  --error-color: #b91c1c;   /* vs --error-bg: 5.3:1 */
   --error-bg: #fee2e2;
   --error-border: #ef4444;
-  --warning-color: #d97706;
+  --warning-color: #92400e; /* vs --warning-bg: 6.4:1 */
   --warning-bg: #fef3c7;
   --warning-border: #f59e0b;
-  --dupe-color: #7c3aed;
+  --dupe-color: #7c3aed;    /* vs --dupe-bg: 4.8:1, already passing */
   --dupe-bg: #ede9fe;
   --dupe-border: #8b5cf6;
-  --filled-color: #0284c7;
+  --filled-color: #0369a1;  /* vs --filled-bg: 5.2:1 */
   --filled-bg: #e0f2fe;
   --filled-border: #0284c7;
-  --success-color: #059669;
+  --success-color: #047857; /* vs --success-bg: 4.8:1 */
   --success-bg: #d1fae5;
   --success-border: #a7f3d0;
   --success-text: #065f46;
