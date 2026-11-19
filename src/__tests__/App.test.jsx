@@ -585,6 +585,27 @@ describe('App — file loading', () => {
   )
 
   it(
+    'warns instead of silently discarding the rest when multiple files are dropped at once',
+    async () => {
+      // handleDrop only ever read dataTransfer.files[0] — dropping several
+      // files (easy to do by accident, unlike the file-picker input, which
+      // has no `multiple` attribute and so only ever offers one) silently
+      // loaded just the first and discarded the rest with no indication
+      // anything was skipped.
+      render(<App />)
+      const dropZone = screen.getByLabelText('app-ads.txt input')
+      const first = new File(['first.com, pub-1, DIRECT'], 'first.txt', { type: 'text/plain' })
+      const second = new File(['second.com, pub-2, DIRECT'], 'second.txt', { type: 'text/plain' })
+
+      fireEvent.drop(dropZone, { dataTransfer: { files: [first, second] } })
+
+      expect(await screen.findByText(/Dropped 2 files.*only "first\.txt" was loaded/))
+        .toBeTruthy()
+      await waitFor(() => expect(dropZone.value).toBe('first.com, pub-1, DIRECT'))
+    }
+  )
+
+  it(
     'clears the stale file-read error when a URL load replaces the input, not just via Clear',
     async () => {
       // Same gap as the "typing over it by hand" case just above, but for

@@ -253,7 +253,7 @@ export default function App() {
     setUrlError('')
   }, [])
 
-  const loadFile = useCallback((file) => {
+  const loadFile = useCallback((file, notice) => {
     if (!file) return
     setFileError('')
     // Generation guard — same race class as handleBatchCheck's batchGenRef.
@@ -269,6 +269,10 @@ export default function App() {
     reader.onload = (e) => {
       if (fileLoadGenRef.current !== generation) return
       loadText(e.target.result)
+      // loadText() just cleared fileError above — set the drop-multiple-files
+      // notice (if any) AFTER that, or it would be wiped before the user ever
+      // saw it.
+      if (notice) setFileError(notice)
     }
     // Without this, a failed read (permission error, the file being removed/
     // unmounted between picking it and the read completing, a dropped item
@@ -287,7 +291,15 @@ export default function App() {
   const handleDrop = (e) => {
     e.preventDefault()
     setIsDragging(false)
-    loadFile(e.dataTransfer.files[0])
+    // Unlike the file-picker input (no `multiple` attribute, so the OS
+    // dialog only lets the user pick one), a native drop zone has no such
+    // restriction — dropping several files silently loaded only the first
+    // and discarded the rest with no indication anything was skipped.
+    const files = e.dataTransfer.files
+    const notice = files.length > 1
+      ? `Dropped ${files.length} files — only "${files[0]?.name}" was loaded. Drop one file at a time.`
+      : undefined
+    loadFile(files[0], notice)
   }
 
   const handleLoadUrl = async () => {
