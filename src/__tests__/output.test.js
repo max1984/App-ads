@@ -26,6 +26,15 @@ describe('sortCleanedOutput', () => {
     const { content } = sortCleanedOutput('google.com, pub-2, DIRECT\ngoogle.com, pub-1, DIRECT')
     expect(content.split('\n')).toEqual(['google.com, pub-1, DIRECT', 'google.com, pub-2, DIRECT'])
   })
+
+  // Regression: validator.js keeps a malformed data line (too few fields) verbatim —
+  // including any leading whitespace — so the user can see and fix it. Sorting by the
+  // raw (untrimmed) line text put that whitespace before every real domain character,
+  // jumping the broken line to the top of the list regardless of its actual content.
+  it('sorts a malformed line with leading whitespace by its trimmed content', () => {
+    const { content } = sortCleanedOutput('zebra.com, 1, DIRECT\n  bad-line\napple.com, 2, DIRECT')
+    expect(content.split('\n')).toEqual(['apple.com, 2, DIRECT', '  bad-line', 'zebra.com, 1, DIRECT'])
+  })
 })
 
 describe('sortRecordsForExport', () => {

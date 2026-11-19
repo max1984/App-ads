@@ -11,7 +11,11 @@ export function sortCleanedOutput(content, statuses = []) {
     else if (VARIABLE_LINE.test(t)) variables.push(row)
     else dataRows.push(row)
   })
-  dataRows.sort((a, b) => a.line.localeCompare(b.line))
+  // Compare trimmed text, not the raw line: a malformed record kept verbatim (e.g. too
+  // few fields, pushed as-is so the user can see and fix it) can carry original leading
+  // whitespace, which would otherwise sort before every real domain and jump to the top
+  // of the list regardless of its actual content.
+  dataRows.sort((a, b) => a.line.trim().localeCompare(b.line.trim()))
   const all = [...headers, ...variables, ...dataRows]
   return { content: all.map(r => r.line).join('\n'), statuses: all.map(r => r.status) }
 }
