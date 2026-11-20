@@ -15,6 +15,30 @@ appnexus.com, 1234, RESELLER, f5ab79cb980f11d1`
 
 const LARGE_FILE_THRESHOLD = 2000
 const DARK_MODE_KEY = 'app-ads-dark-mode'
+// A real app-ads.txt is a few KB at most — this is generous headroom, not a
+// tight bound, just enough to stop someone dropping an unrelated multi-MB
+// file and freezing the tab on readAsText()+validateAdsTxt() over a huge
+// string.
+const MAX_UPLOAD_SIZE = 5 * 1024 * 1024
+
+// Dropped/selected files aren't restricted to text — an image or PDF read
+// via readAsText() decodes as UTF-8 regardless, producing either literal NUL
+// bytes or a flood of U+FFFD replacement characters (invalid byte
+// sequences), neither of which a real app-ads.txt would ever contain. This
+// is a heuristic, not a real text/binary detector — it only needs to catch
+// the common "dropped the wrong kind of file" case, not survive adversarial
+// input.
+function looksLikeBinary(text) {
+  const sample = text.slice(0, 4096)
+  if (sample.length === 0) return false
+  if (sample.includes('\u0000')) return true
+  let suspicious = 0
+  for (const ch of sample) {
+    const code = ch.codePointAt(0)
+    if (code === 0xfffd || (code < 0x20 && code !== 9 && code !== 10 && code !== 13)) suspicious++
+  }
+  return suspicious / sample.length > 0.01
+}
 
 // Manual dark-mode toggle used to be forgotten on every reload, silently
 // reverting to the OS preference — localStorage read/write is best-effort
@@ -256,6 +280,10 @@ export default function App() {
   const loadFile = useCallback((file, notice) => {
     if (!file) return
     setFileError('')
+    if (file.size > MAX_UPLOAD_SIZE) {
+      setFileError(`"${file.name}" is ${(file.size / (1024 * 1024)).toFixed(1)} MB — larger than the ${MAX_UPLOAD_SIZE / (1024 * 1024)} MB limit. A real app-ads.txt is normally a few KB.`)
+      return
+    }
     // Generation guard — same race class as handleBatchCheck's batchGenRef.
     // Dropping/selecting a second file while the first one's (async)
     // FileReader.readAsText() is still pending starts a second, fully
@@ -268,7 +296,12 @@ export default function App() {
     const reader = new FileReader()
     reader.onload = (e) => {
       if (fileLoadGenRef.current !== generation) return
-      loadText(e.target.result)
+      const text = e.target.result
+      if (looksLikeBinary(text)) {
+        setFileError(`"${file.name}" doesn't look like a text file — drop the app-ads.txt file itself, not an image, PDF, or other binary file.`)
+        return
+      }
+      loadText(text)
       // loadText() just cleared fileError above — set the drop-multiple-files
       // notice (if any) AFTER that, or it would be wiped before the user ever
       // saw it.

@@ -585,6 +585,42 @@ describe('App — file loading', () => {
   )
 
   it(
+    'rejects a file larger than the upload size limit before even trying to read it',
+    async () => {
+      // loadFile() had no size check at all — dropping/selecting an
+      // unrelated multi-MB file fed its full content straight into
+      // readAsText() and then validateAdsTxt(), with nothing stopping a
+      // huge string from freezing the tab. A real app-ads.txt is a few KB.
+      render(<App />)
+      const fileInput = document.querySelector('input[type="file"][accept=".txt,text/plain"]')
+      const big = new File([new Uint8Array(5 * 1024 * 1024 + 1)], 'huge.txt', { type: 'text/plain' })
+
+      fireEvent.change(fileInput, { target: { files: [big] } })
+
+      expect(await screen.findByText(/"huge\.txt" is 5\.0 MB — larger than the 5 MB limit/)).toBeTruthy()
+    }
+  )
+
+  it(
+    'rejects a dropped binary file instead of loading it as unreadable text',
+    async () => {
+      // loadFile() had no content check either — an image, PDF, or other
+      // binary file read via readAsText() decodes as UTF-8 regardless,
+      // landing in the editor as unreadable mojibake with no indication
+      // anything had gone wrong.
+      render(<App />)
+      const dropZone = screen.getByLabelText('app-ads.txt input')
+      const bytes = new Uint8Array(200)
+      for (let i = 0; i < bytes.length; i++) bytes[i] = i % 256
+      const binary = new File([bytes], 'image.png', { type: 'image/png' })
+
+      fireEvent.drop(dropZone, { dataTransfer: { files: [binary] } })
+
+      expect(await screen.findByText(/"image\.png" doesn't look like a text file/)).toBeTruthy()
+    }
+  )
+
+  it(
     'warns instead of silently discarding the rest when multiple files are dropped at once',
     async () => {
       // handleDrop only ever read dataTransfer.files[0] — dropping several
