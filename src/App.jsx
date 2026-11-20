@@ -338,7 +338,10 @@ export default function App() {
     // and discarded the rest with no indication anything was skipped.
     const files = e.dataTransfer.files
     const notice = files.length > 1
-      ? `Dropped ${files.length} files — only "${files[0]?.name}" was loaded. Drop one file at a time.`
+      // Phrased as "was used", not "was loaded" — this file may still fail
+      // the size/binary checks below, and claiming it loaded when it didn't
+      // would make the combined message self-contradictory.
+      ? `Dropped ${files.length} files — only "${files[0]?.name}" was used; the rest were ignored.`
       : undefined
     loadFile(files[0], notice)
   }

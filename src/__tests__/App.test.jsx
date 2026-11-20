@@ -635,7 +635,7 @@ describe('App — file loading', () => {
 
       fireEvent.drop(dropZone, { dataTransfer: { files: [first, second] } })
 
-      expect(await screen.findByText(/Dropped 2 files.*only "first\.txt" was loaded/))
+      expect(await screen.findByText(/Dropped 2 files.*only "first\.txt" was used/))
         .toBeTruthy()
       await waitFor(() => expect(dropZone.value).toBe('first.com, pub-1, DIRECT'))
     }
@@ -656,7 +656,7 @@ describe('App — file loading', () => {
       fireEvent.drop(dropZone, { dataTransfer: { files: [big, second] } })
 
       const msg = await screen.findByText(/"huge\.txt" is 5\.0 MB/)
-      expect(msg.textContent).toMatch(/Dropped 2 files.*only "huge\.txt" was loaded/)
+      expect(msg.textContent).toMatch(/Dropped 2 files.*only "huge\.txt" was used/)
     }
   )
 
@@ -674,7 +674,7 @@ describe('App — file loading', () => {
       fireEvent.drop(dropZone, { dataTransfer: { files: [binary, second] } })
 
       const msg = await screen.findByText(/"image\.png" doesn't look like a text file/)
-      expect(msg.textContent).toMatch(/Dropped 2 files.*only "image\.png" was loaded/)
+      expect(msg.textContent).toMatch(/Dropped 2 files.*only "image\.png" was used/)
     }
   )
 
