@@ -642,6 +642,43 @@ describe('App — file loading', () => {
   )
 
   it(
+    'still mentions the dropped-multiple-files notice when the first file is also oversized',
+    async () => {
+      // The size-limit check returns before the multi-file notice is ever
+      // set, so dropping 2 files where the first one also happens to be
+      // oversized used to show only the size error, silently losing the
+      // "other files were ignored" information.
+      render(<App />)
+      const dropZone = screen.getByLabelText('app-ads.txt input')
+      const big = new File([new Uint8Array(5 * 1024 * 1024 + 1)], 'huge.txt', { type: 'text/plain' })
+      const second = new File(['second.com, pub-2, DIRECT'], 'second.txt', { type: 'text/plain' })
+
+      fireEvent.drop(dropZone, { dataTransfer: { files: [big, second] } })
+
+      const msg = await screen.findByText(/"huge\.txt" is 5\.0 MB/)
+      expect(msg.textContent).toMatch(/Dropped 2 files.*only "huge\.txt" was loaded/)
+    }
+  )
+
+  it(
+    'still mentions the dropped-multiple-files notice when the first file is also binary',
+    async () => {
+      // Same gap as the size check above, but for the binary-content check.
+      render(<App />)
+      const dropZone = screen.getByLabelText('app-ads.txt input')
+      const bytes = new Uint8Array(200)
+      for (let i = 0; i < bytes.length; i++) bytes[i] = i % 256
+      const binary = new File([bytes], 'image.png', { type: 'image/png' })
+      const second = new File(['second.com, pub-2, DIRECT'], 'second.txt', { type: 'text/plain' })
+
+      fireEvent.drop(dropZone, { dataTransfer: { files: [binary, second] } })
+
+      const msg = await screen.findByText(/"image\.png" doesn't look like a text file/)
+      expect(msg.textContent).toMatch(/Dropped 2 files.*only "image\.png" was loaded/)
+    }
+  )
+
+  it(
     'clears the stale file-read error when a URL load replaces the input, not just via Clear',
     async () => {
       // Same gap as the "typing over it by hand" case just above, but for

@@ -281,7 +281,12 @@ export default function App() {
     if (!file) return
     setFileError('')
     if (file.size > MAX_UPLOAD_SIZE) {
-      setFileError(`"${file.name}" is ${(file.size / (1024 * 1024)).toFixed(1)} MB — larger than the ${MAX_UPLOAD_SIZE / (1024 * 1024)} MB limit. A real app-ads.txt is normally a few KB.`)
+      const sizeMsg = `"${file.name}" is ${(file.size / (1024 * 1024)).toFixed(1)} MB — larger than the ${MAX_UPLOAD_SIZE / (1024 * 1024)} MB limit. A real app-ads.txt is normally a few KB.`
+      // This early return used to skip the drop-multiple-files notice below
+      // entirely whenever the FIRST dropped file also happened to be
+      // oversized — the user got the size error but never learned other
+      // files were dropped and ignored too.
+      setFileError(notice ? `${sizeMsg} ${notice}` : sizeMsg)
       return
     }
     // Generation guard — same race class as handleBatchCheck's batchGenRef.
@@ -298,7 +303,10 @@ export default function App() {
       if (fileLoadGenRef.current !== generation) return
       const text = e.target.result
       if (looksLikeBinary(text)) {
-        setFileError(`"${file.name}" doesn't look like a text file — drop the app-ads.txt file itself, not an image, PDF, or other binary file.`)
+        const binaryMsg = `"${file.name}" doesn't look like a text file — drop the app-ads.txt file itself, not an image, PDF, or other binary file.`
+        // Same gap as the size check above: don't let this return swallow
+        // the drop-multiple-files notice.
+        setFileError(notice ? `${binaryMsg} ${notice}` : binaryMsg)
         return
       }
       loadText(text)
