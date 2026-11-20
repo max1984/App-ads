@@ -359,6 +359,21 @@ export default function App() {
     }
   }
 
+  // PERF FIX: stable callback for BatchResultRow's "Load" button. A large
+  // batch (hundreds/thousands of URLs) completes one at a time, and each
+  // completion calls setBatchResults with a freshly-spread array — without
+  // this, the old inline `onLoad={() => {...}}` below got a NEW function
+  // identity on every one of those updates, which defeats BatchResultRow's
+  // memo() no matter how carefully `item` identity is preserved for the
+  // other rows: a changed prop (even an unused-looking callback) still
+  // forces memo to re-render. That turned "update 1 of N rows" into
+  // "re-render all N rows", for each of the N completions — O(n²) render
+  // work for a batch that should cost O(n).
+  const handleBatchRowLoad = useCallback((item) => {
+    loadText(item.content)
+    setShowBatch(false)
+  }, [loadText])
+
   // BUG-05 + BUG-06 FIX: semaphore-limited concurrency + generation counter
   const handleBatchCheck = async () => {
     const urls = batchInput.split('\n').map(normalizeAdsTxtUrl).filter(Boolean)
@@ -832,7 +847,7 @@ export default function App() {
             {batchResults.length > 0 && (
               <div className="batch-results">
                 {batchResults.map((r, i) => (
-                  <BatchResultRow key={i} item={r} onLoad={() => { loadText(r.content); setShowBatch(false) }} />
+                  <BatchResultRow key={i} item={r} onLoad={handleBatchRowLoad} />
                 ))}
               </div>
             )}
@@ -1331,7 +1346,9 @@ function DiffRow({ change, onJumpToLine }) {
 
 /* ── Batch result row ─────────────────────────────────────────── */
 
-function BatchResultRow({ item, onLoad }) {
+// PERF FIX: memoized so that one row finishing in a large batch (see
+// handleBatchRowLoad above) only re-renders that one row, not all of them.
+const BatchResultRow = memo(function BatchResultRow({ item, onLoad }) {
   const [copiedUrl, setCopiedUrl] = useState(false)
   const copiedUrlTimerRef = useRef()
 
@@ -1393,10 +1410,10 @@ function BatchResultRow({ item, onLoad }) {
           twin above for why the confirmation text needs the word "Copied",
           not just a bare '✓') */}
       <button className="btn btn-ghost btn-xs" onClick={handleCopyUrl} aria-live="polite">{copiedUrl ? '✓ Copied!' : 'Copy URL'}</button>
-      <button className="btn btn-ghost btn-xs batch-load-btn" onClick={onLoad}>Load</button>
+      <button className="btn btn-ghost btn-xs batch-load-btn" onClick={() => onLoad(item)}>Load</button>
     </div>
   )
-}
+})
 
 /* ── Issue card ───────────────────────────────────────────────── */
 
