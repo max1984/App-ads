@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { render, screen, fireEvent, cleanup, act, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, cleanup, act, waitFor, within } from '@testing-library/react'
 import App from '../App.jsx'
 import * as urlModule from '../url.js'
 
@@ -1250,6 +1250,38 @@ describe('App — batch check', () => {
 
       expect(copyUrlBtn.textContent).toContain('Copied')
       expect(copyUrlBtn.textContent).not.toBe('✓')
+    }
+  )
+
+  it(
+    "each batch row's Load button loads THAT row's own content, not a stale/wrong one — " +
+      'guards the memo()/useCallback refactor from the 75th-cycle performance fix: a row keeps ' +
+      'its own item identity across re-renders (only the completing row gets a new object in ' +
+      'setBatchResults), and handleBatchRowLoad receives that row\'s item as an argument rather ' +
+      "than closing over it, so clicking row 2's Load after row 1 still loads row 2's content",
+    async () => {
+      urlModule.fetchFromUrl.mockImplementation((url) =>
+        Promise.resolve(url.includes('a.com') ? 'a.com, 1, DIRECT' : 'b.com, 2, DIRECT'))
+
+      render(<App />)
+      fireEvent.click(screen.getByRole('button', { name: /Batch URL check/ }))
+      fireEvent.change(screen.getByLabelText('URLs to check, one per line'), {
+        target: { value: 'a.com\nb.com' },
+      })
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Check all URLs' }))
+      })
+
+      const batchResultsEl = document.querySelector('.batch-results')
+      const loadButtons = within(batchResultsEl).getAllByRole('button', { name: 'Load' })
+      expect(loadButtons).toHaveLength(2)
+
+      fireEvent.click(loadButtons[1])
+      expect(screen.getByLabelText('app-ads.txt input').value).toBe('b.com, 2, DIRECT')
+
+      fireEvent.click(screen.getByRole('button', { name: /Batch URL check/ }))
+      fireEvent.click(within(document.querySelector('.batch-results')).getAllByRole('button', { name: 'Load' })[0])
+      expect(screen.getByLabelText('app-ads.txt input').value).toBe('a.com, 1, DIRECT')
     }
   )
 })
