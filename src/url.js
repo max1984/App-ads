@@ -101,7 +101,10 @@ export async function fetchFromUrl(url, fetchImpl = fetch) {
       }
     }
     if (!gotText) {
-      throw new Error(lastErr.name === 'TimeoutError' ? 'request timed out' : 'network error or blocked by CORS')
+      // cause: lastErr (the final proxy error, when proxies were tried), not directErr —
+      // more informative for debugging than the rule's expected nearest catch binding.
+      // eslint-disable-next-line preserve-caught-error
+      throw new Error(lastErr.name === 'TimeoutError' ? 'request timed out' : 'network error or blocked by CORS', { cause: lastErr })
     }
   }
   if (looksLikeHtml(text)) {

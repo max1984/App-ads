@@ -361,7 +361,7 @@ function companyOf(name) {
 // unflagged, with the rest of the value silently dropped.
 function toBareDomain(value) {
   const schemeStripped = value.trim().replace(/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//, '')
-  return schemeStripped.split(/[\/?#\s,]/)[0].toLowerCase()
+  return schemeStripped.split(/[/?#\s,]/)[0].toLowerCase()
 }
 
 export function validateAdsTxt(content) {

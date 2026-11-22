@@ -361,7 +361,7 @@ describe('validateAdsTxt — BOM handling', () => {
   it('strips a BOM embedded mid-line, e.g. from two files pasted together without a newline between them', () => {
     // Regression: toBareDomain's `.split(/[\/?#\s]/)` treats U+FEFF as a
     // separator (it's part of JS regex `\s`), so an un-stripped BOM in the
-    // middle of a domain used to silently truncate it ("exa﻿mple.com"
+    // middle of a domain used to silently truncate it ("exa\u{feff}mple.com"
     // became the domain "exa", reported as "Invalid domain 'exa'" with no
     // hint that an invisible character caused it).
     const r = validateAdsTxt(OWNER + 'exa﻿mple.com, pub-1, DIRECT, f08c47fec0942fa0')
