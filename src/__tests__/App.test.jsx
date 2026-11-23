@@ -428,6 +428,22 @@ describe('App — dark mode', () => {
       expect(document.documentElement.hasAttribute('data-dark')).toBe(false)
     }
   )
+
+  it(
+    'falls back to the OS preference instead of crashing when reading the stored preference throws',
+    () => {
+      // Some browsers (private mode with storage fully disabled) throw on
+      // localStorage access itself, not just return null — loadStoredDarkMode()
+      // has a catch for exactly this, but nothing previously made getItem
+      // actually throw to exercise it.
+      vi.spyOn(window.localStorage, 'getItem').mockImplementation(() => { throw new Error('blocked') })
+      window.matchMedia = () => ({ matches: true }) // OS preference: dark
+
+      render(<App />)
+
+      expect(document.documentElement.getAttribute('data-dark')).toBe('1')
+    }
+  )
 })
 
 describe('App — URL loader', () => {
@@ -617,6 +633,48 @@ describe('App — file loading', () => {
       fireEvent.drop(dropZone, { dataTransfer: { files: [binary] } })
 
       expect(await screen.findByText(/"image\.png" doesn't look like a text file/)).toBeTruthy()
+    }
+  )
+
+  it(
+    "detects a binary file even without any NUL byte — looksLikeBinary's second heuristic " +
+      '(too many replacement/control characters) — not just its NUL-byte shortcut, which the ' +
+      'test above always hits first and so never exercises this one',
+    async () => {
+      render(<App />)
+      const dropZone = screen.getByLabelText('app-ads.txt input')
+      // 0xFF is never a valid UTF-8 lead byte, so readAsText() decodes every
+      // byte as its own U+FFFD replacement character — no 0x00 anywhere,
+      // so the NUL-byte shortcut above can't fire; this is the only way to
+      // reach the suspicious-character-counting loop and its ratio check.
+      const bytes = new Uint8Array(200).fill(0xff)
+      const binary = new File([bytes], 'photo.jpg', { type: 'image/jpeg' })
+
+      fireEvent.drop(dropZone, { dataTransfer: { files: [binary] } })
+
+      expect(await screen.findByText(/"photo\.jpg" doesn't look like a text file/)).toBeTruthy()
+    }
+  )
+
+  it(
+    'loads a dropped empty file as empty content instead of flagging it as binary',
+    async () => {
+      // looksLikeBinary('') has nothing to sample and must not treat an
+      // empty file as suspicious — it should load (as empty), not be
+      // rejected with the binary-file error message. Starting from
+      // non-empty content makes the editor actually clearing itself a
+      // meaningful signal that the (async) read completed and ran
+      // loadText(''), rather than just asserting the error is absent —
+      // which would also be trivially true before the read even finishes.
+      render(<App />)
+      typeInput('a.com, 1, DIRECT')
+      const dropZone = screen.getByLabelText('app-ads.txt input')
+      const empty = new File([], 'app-ads.txt', { type: 'text/plain' })
+
+      fireEvent.drop(dropZone, { dataTransfer: { files: [empty] } })
+
+      await waitFor(() => expect(screen.getByLabelText('app-ads.txt input').value).toBe(''))
+      expect(screen.queryByText(/doesn't look like a text file/)).toBeFalsy()
     }
   )
 
@@ -1200,6 +1258,47 @@ describe('App — version history', () => {
 
       expect(screen.getByText('Version 1')).toBeTruthy()
       expect(setItemSpy).not.toHaveBeenCalled()
+    }
+  )
+
+  it(
+    "shows how long ago a saved version was made, switching from minutes to hours to days to " +
+      "an actual date — every other version-history test saves and checks immediately, so only " +
+      "ever exercises the 'just now' branch",
+    () => {
+      vi.useFakeTimers()
+      const savedAt = Date.now()
+      render(<App />)
+      fireEvent.click(screen.getByRole('button', { name: /Version history/ }))
+      typeInput('a.com, 1, DIRECT')
+      fireEvent.click(screen.getByRole('button', { name: /Save current as version/ }))
+      expect(screen.getByText('just now')).toBeTruthy()
+
+      // Re-closing/reopening the panel is a state change, forcing a fresh
+      // render that recomputes formatVersionTime() against the (fake)
+      // "now" — nothing else makes this component re-render on its own as
+      // time passes, there's no polling/interval for it.
+      const reopen = () => {
+        fireEvent.click(screen.getByRole('button', { name: /Version history/ }))
+        fireEvent.click(screen.getByRole('button', { name: /Version history/ }))
+      }
+
+      act(() => { vi.setSystemTime(savedAt + 90 * 1000) }) // 1.5 min
+      reopen()
+      expect(screen.getByText('1m ago')).toBeTruthy()
+
+      act(() => { vi.setSystemTime(savedAt + 3 * 60 * 60 * 1000) }) // 3h
+      reopen()
+      expect(screen.getByText('3h ago')).toBeTruthy()
+
+      act(() => { vi.setSystemTime(savedAt + 2 * 24 * 60 * 60 * 1000) }) // 2 days
+      reopen()
+      expect(screen.getByText('2d ago')).toBeTruthy()
+
+      const faraway = savedAt + 10 * 24 * 60 * 60 * 1000 // 10 days
+      act(() => { vi.setSystemTime(faraway) })
+      reopen()
+      expect(screen.getByText(new Date(savedAt).toLocaleDateString())).toBeTruthy()
     }
   )
 })
