@@ -300,6 +300,30 @@ describe('compareSnapshots', () => {
     expect(d.variablesChanged).toHaveLength(0)
   })
 
+  it('reports a newly-added single-value variable (e.g. OWNERDOMAIN) as added, not changed', () => {
+    // Every other added/removed-variable test above uses MANAGERDOMAIN/SUBDOMAIN/
+    // CONTACT, which are deleted from `varNames` up front and diffed through the
+    // separate per-country/multi-value path — OWNERDOMAIN (and any other single-
+    // value variable) goes through the plain before/after loop instead, whose own
+    // added/removed branches had never been exercised by a genuine add or removal,
+    // only by a change (both sides present, different values).
+    const before = 'foo.com, 1, DIRECT'
+    const after = 'OWNERDOMAIN=a.com\nfoo.com, 1, DIRECT'
+    const d = compareSnapshots(before, after)
+    expect(d.variablesAdded).toEqual([{ name: 'OWNERDOMAIN', value: 'a.com' }])
+    expect(d.variablesRemoved).toHaveLength(0)
+    expect(d.variablesChanged).toHaveLength(0)
+  })
+
+  it('reports a removed single-value variable (e.g. OWNERDOMAIN) as removed, not changed', () => {
+    const before = 'OWNERDOMAIN=a.com\nfoo.com, 1, DIRECT'
+    const after = 'foo.com, 1, DIRECT'
+    const d = compareSnapshots(before, after)
+    expect(d.variablesRemoved).toEqual([{ name: 'OWNERDOMAIN', value: 'a.com' }])
+    expect(d.variablesAdded).toHaveLength(0)
+    expect(d.variablesChanged).toHaveLength(0)
+  })
+
   it('reports an added CONTACT line as added, not as a misleading change to the existing one', () => {
     // Adding a second CONTACT line while keeping the first changes variables.CONTACT
     // (last-wins) from the first value to the second, which looks exactly like the first
