@@ -1150,6 +1150,58 @@ describe('App — version history', () => {
       await waitFor(() => expect(screen.getByRole('button', { name: /Not a valid history file/ })).toBeTruthy())
     }
   )
+
+  it(
+    'does nothing when the history file picker is cancelled (no file chosen) — the onChange still ' +
+      'fires with an empty FileList, and handleImportVersions must not blow up or flash a warning ' +
+      'for a file that was never actually picked',
+    () => {
+      render(<App />)
+      fireEvent.click(screen.getByRole('button', { name: /Version history/ }))
+
+      const jsonInput = document.querySelector('input[type="file"][accept*="json"]')
+      fireEvent.change(jsonInput, { target: { files: [] } })
+
+      expect(screen.queryByRole('button', { name: /Not a valid history file/ })).toBeFalsy()
+      expect(screen.queryByRole('button', { name: /Imported/ })).toBeFalsy()
+    }
+  )
+
+  it(
+    'flashes the same "not a valid history file" warning for a chosen file that is not even ' +
+      'parseable JSON — distinct from the "valid JSON but not an array" case above, which takes a ' +
+      'different branch (JSON.parse itself throws here, instead of failing the Array.isArray check)',
+    async () => {
+      render(<App />)
+      fireEvent.click(screen.getByRole('button', { name: /Version history/ }))
+
+      const jsonInput = document.querySelector('input[type="file"][accept*="json"]')
+      const file = new File(['not json at all {'], 'garbage.json', { type: 'application/json' })
+      fireEvent.change(jsonInput, { target: { files: [file] } })
+
+      await waitFor(() => expect(screen.getByRole('button', { name: /Not a valid history file/ })).toBeTruthy())
+    }
+  )
+
+  it(
+    'leaves the version label untouched when the rename prompt is cancelled — jsdom defaults ' +
+      'window.prompt to returning null, which must be treated the same as an explicitly empty ' +
+      'label (no rename, no persistVersions call)',
+    () => {
+      render(<App />)
+      fireEvent.click(screen.getByRole('button', { name: /Version history/ }))
+      typeInput('a.com, 1, DIRECT')
+      fireEvent.click(screen.getByRole('button', { name: /Save current as version/ }))
+      expect(screen.getByText('Version 1')).toBeTruthy()
+
+      vi.spyOn(window, 'prompt').mockReturnValue(null)
+      const setItemSpy = vi.spyOn(window.localStorage, 'setItem')
+      fireEvent.click(screen.getByRole('button', { name: 'Rename "Version 1"' }))
+
+      expect(screen.getByText('Version 1')).toBeTruthy()
+      expect(setItemSpy).not.toHaveBeenCalled()
+    }
+  )
 })
 
 describe('App — batch check', () => {
@@ -1306,6 +1358,31 @@ describe('App — batch check', () => {
       fireEvent.click(screen.getByRole('button', { name: /Batch URL check/ }))
       fireEvent.click(within(document.querySelector('.batch-results')).getAllByRole('button', { name: 'Load' })[0])
       expect(screen.getByLabelText('app-ads.txt input').value).toBe('a.com, 1, DIRECT')
+    }
+  )
+
+  it(
+    'renders a dedicated error row (icon, message, and its own Copy URL button) for a URL that ' +
+      "fails during the batch check — every other batch test only exercises the success path, so " +
+      "the row's whole status === 'error' render branch (with its own, separate Copy URL button) " +
+      'was never actually reached',
+    async () => {
+      urlModule.fetchFromUrl.mockImplementation((url) =>
+        url.includes('bad') ? Promise.reject(new Error('network error')) : Promise.resolve('a.com, 1, DIRECT'))
+
+      render(<App />)
+      fireEvent.click(screen.getByRole('button', { name: /Batch URL check/ }))
+      fireEvent.change(screen.getByLabelText('URLs to check, one per line'), {
+        target: { value: 'good.com\nbad.com' },
+      })
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Check all URLs' }))
+      })
+
+      const batchResultsEl = document.querySelector('.batch-results')
+      expect(within(batchResultsEl).getByText('network error')).toBeTruthy()
+      expect(document.querySelector('.batch-row-error')).toBeTruthy()
+      expect(within(document.querySelector('.batch-row-error')).getByRole('button', { name: 'Copy URL' })).toBeTruthy()
     }
   )
 })
