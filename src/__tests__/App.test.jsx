@@ -1387,6 +1387,109 @@ describe('App — batch check', () => {
   )
 })
 
+describe('App — transient flash messages clear after their own full duration', () => {
+  // Every regression test above for these same timers (Share, Copy, batch Copy
+  // URL) deliberately fires a SECOND click before the first click's timer is
+  // due, to prove the stale one gets cleared and never fires at all — none of
+  // them ever let an un-superseded timer actually run to completion, so
+  // nothing confirmed the ordinary, non-raced case: a single click's flash
+  // really does clear back to the idle label once its own 2s/4s is up.
+
+  it('clears the main Copy button\'s "Copied!" flash back to "Copy" after 2s', async () => {
+    vi.useFakeTimers()
+    document.execCommand = vi.fn(() => true)
+    render(<App />)
+    typeInput('google.com, pub-1, DIRECT')
+    fireEvent.click(screen.getByRole('button', { name: /Validate/ }))
+    const copyBtn = screen.getByRole('button', { name: 'Copy' })
+
+    await act(async () => { fireEvent.click(copyBtn) })
+    expect(copyBtn.textContent).toContain('Copied')
+
+    act(() => { vi.advanceTimersByTime(2000) })
+    expect(copyBtn.textContent).toBe('Copy')
+  })
+
+  it('clears the Share button\'s "Copied!" flash back to "Share" after its 2s', async () => {
+    vi.useFakeTimers()
+    document.execCommand = vi.fn(() => true)
+    render(<App />)
+    typeInput('google.com, pub-1, DIRECT')
+    const shareBtn = screen.getByRole('button', { name: 'Share' })
+
+    await act(async () => { fireEvent.click(shareBtn) })
+    expect(shareBtn.textContent).toContain('Copied')
+
+    act(() => { vi.advanceTimersByTime(2000) })
+    expect(shareBtn.textContent).toBe('Share')
+  })
+
+  it('clears the Share button\'s "Copy failed" flash back to "Share" after its own 4s (longer than the 2s success case)', async () => {
+    vi.useFakeTimers()
+    document.execCommand = vi.fn(() => false)
+    render(<App />)
+    typeInput('google.com, pub-1, DIRECT')
+    const shareBtn = screen.getByRole('button', { name: 'Share' })
+
+    await act(async () => { fireEvent.click(shareBtn) })
+    expect(shareBtn.textContent).toContain('Copy failed')
+
+    act(() => { vi.advanceTimersByTime(4000) })
+    expect(shareBtn.textContent).toBe('Share')
+  })
+
+  it('clears a network-coverage template button\'s "copied!" flash back to its domain after 2s', async () => {
+    vi.useFakeTimers()
+    document.execCommand = vi.fn(() => true)
+    render(<App />)
+    typeInput('google.com, pub-1, DIRECT')
+    fireEvent.click(screen.getByRole('button', { name: /Validate/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Network Coverage/ }))
+    const templateBtn = screen.getByTitle(/AppNexus/)
+
+    await act(async () => { fireEvent.click(templateBtn) })
+    expect(templateBtn.textContent).toContain('copied!')
+
+    act(() => { vi.advanceTimersByTime(2000) })
+    expect(templateBtn.textContent).not.toContain('copied!')
+  })
+
+  it('clears the "✓ Saved!" flash back to "Save current as version" after its 2s', () => {
+    vi.useFakeTimers()
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: /Version history/ }))
+    typeInput('a.com, 1, DIRECT')
+    const saveBtn = screen.getByRole('button', { name: /Save current as version/ })
+
+    fireEvent.click(saveBtn)
+    expect(saveBtn.textContent).toContain('Saved')
+
+    act(() => { vi.advanceTimersByTime(2000) })
+    expect(saveBtn.textContent).toContain('Save current as version')
+  })
+
+  it('clears a batch row\'s "Copied!" flash back to "Copy URL" after its own 2s', async () => {
+    vi.useFakeTimers()
+    document.execCommand = vi.fn(() => true)
+    urlModule.fetchFromUrl.mockResolvedValue('google.com, pub-1, DIRECT')
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: /Batch URL check/ }))
+    fireEvent.change(screen.getByLabelText('URLs to check, one per line'), {
+      target: { value: 'a.com' },
+    })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Check all URLs' }))
+    })
+
+    const copyUrlBtn = screen.getByRole('button', { name: 'Copy URL' })
+    await act(async () => { fireEvent.click(copyUrlBtn) })
+    expect(copyUrlBtn.textContent).toContain('Copied')
+
+    act(() => { vi.advanceTimersByTime(2000) })
+    expect(copyUrlBtn.textContent).toBe('Copy URL')
+  })
+})
+
 describe('App — gutter', () => {
   it('renders one line number per input line and highlights error lines', () => {
     const { container } = render(<App />)
