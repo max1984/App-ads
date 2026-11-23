@@ -398,6 +398,53 @@ describe('App — accessibility', () => {
       expect(screen.getByRole('button', { name: 'Jump to line 2' })).toBeTruthy()
     }
   )
+
+  it(
+    'shows "removed" and "normalized" pills in the Changes panel summary, not just "certs added"',
+    () => {
+      render(<App />)
+      // Line 1 (a domain with no known network/cert): lowercase 'direct'
+      // normalized to DIRECT (1 normalized). Lines 2-3: an already-clean,
+      // byte-identical pair, so the second is removed as a duplicate (1
+      // removed). Every existing test that produces changes only ever
+      // triggered the cert-added pill (google.com IS a known network, so
+      // its own case-fix is categorized as 'cert-added', not 'corrected').
+      typeInput('bar.com, pub-1, direct\nfoo.com, pub-2, DIRECT\nfoo.com, pub-2, DIRECT')
+      fireEvent.click(screen.getByRole('button', { name: /Validate/ }))
+
+      expect(screen.getByText(/1 removed/)).toBeTruthy()
+      expect(screen.getByText(/1 normalized/)).toBeTruthy()
+    }
+  )
+
+  it('toggles the Changes panel closed and back open on its own header button', () => {
+    render(<App />)
+    typeInput('google.com, pub-1, direct')
+    fireEvent.click(screen.getByRole('button', { name: /Validate/ }))
+    // Auto-opened because there are changes — the toggle button itself has never
+    // actually been clicked by any test (clicking it here CLOSES it first).
+    expect(screen.getByRole('button', { name: 'Jump to line 1' })).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: /Changes/ }))
+    expect(screen.queryByRole('button', { name: 'Jump to line 1' })).toBeFalsy()
+
+    fireEvent.click(screen.getByRole('button', { name: /Changes/ }))
+    expect(screen.getByRole('button', { name: 'Jump to line 1' })).toBeTruthy()
+  })
+
+  it('clicking the Changes panel\'s "Jump to line" button selects that line in the editor', () => {
+    const line1 = 'a.com, 1, DIRECT'
+    const line2 = 'bar.com, 2, direct'
+    render(<App />)
+    typeInput(`${line1}\n${line2}`)
+    fireEvent.click(screen.getByRole('button', { name: /Validate/ }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Jump to line 2' }))
+
+    const editor = screen.getByLabelText('app-ads.txt input')
+    expect(editor.selectionStart).toBe(line1.length + 1) // +1 for the newline
+    expect(editor.selectionEnd).toBe(line1.length + 1 + line2.length)
+  })
 })
 
 describe('App — dark mode', () => {
@@ -487,6 +534,19 @@ describe('App — URL loader', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Load' }))
 
     await waitFor(() => expect(screen.getByLabelText('app-ads.txt input').value).toBe('google.com, pub-1, DIRECT'))
+  })
+
+  it('clears the "Loaded from:" banner without clearing the editor content', async () => {
+    urlModule.fetchFromUrl.mockResolvedValue('google.com, pub-1, DIRECT')
+    render(<App />)
+    fireEvent.change(screen.getByPlaceholderText(/example.com/i), { target: { value: 'example.com' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Load' }))
+    await waitFor(() => expect(screen.getByText(/example\.com\/app-ads\.txt/)).toBeTruthy())
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear loaded URL' }))
+
+    expect(screen.queryByText('Loaded from:')).toBeFalsy()
+    expect(screen.getByLabelText('app-ads.txt input').value).toBe('google.com, pub-1, DIRECT')
   })
 })
 
@@ -1303,6 +1363,82 @@ describe('App — version history', () => {
   )
 })
 
+describe('App — export/download buttons', () => {
+  it('exports saved version history as a downloadable JSON file', () => {
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:fake')
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: /Version history/ }))
+    typeInput('a.com, 1, DIRECT')
+    fireEvent.click(screen.getByRole('button', { name: /Save current as version/ }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Export history' }))
+
+    expect(URL.createObjectURL).toHaveBeenCalled()
+  })
+
+  it('clicking "Upload file" opens the native file picker', () => {
+    render(<App />)
+    const fileInput = document.querySelector('input[type="file"][accept*="text/plain"]')
+    const clickSpy = vi.spyOn(fileInput, 'click').mockImplementation(() => {})
+
+    fireEvent.click(screen.getByRole('button', { name: 'Upload file' }))
+
+    expect(clickSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('clicking "Import history" opens the native file picker, even with zero saved versions', () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: /Version history/ }))
+    const fileInput = document.querySelector('input[type="file"][accept*="json"]')
+    const clickSpy = vi.spyOn(fileInput, 'click').mockImplementation(() => {})
+
+    fireEvent.click(screen.getByRole('button', { name: /Import history/ }))
+
+    expect(clickSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('sorts the Cleaned output textarea A–Z when the Sort A–Z checkbox is checked', () => {
+    render(<App />)
+    typeInput('b.com, 2, DIRECT\na.com, 1, DIRECT')
+    fireEvent.click(screen.getByRole('button', { name: /Validate/ }))
+    expect(screen.getByLabelText('Cleaned output').value.indexOf('b.com'))
+      .toBeLessThan(screen.getByLabelText('Cleaned output').value.indexOf('a.com'))
+
+    fireEvent.click(screen.getByRole('checkbox', { name: /Sort A.Z/ }))
+
+    const sorted = screen.getByLabelText('Cleaned output').value
+    expect(sorted.indexOf('a.com')).toBeLessThan(sorted.indexOf('b.com'))
+  })
+
+  it('exports JSON in the same sorted order as the Sort A–Z .txt output, not raw validator order', () => {
+    let capturedContent
+    const OrigBlob = globalThis.Blob
+    // mockImplementation needs something `new`-able — an arrow function has
+    // no [[Construct]] and throws "is not a constructor" the moment
+    // downloadFile() does `new Blob(...)`.
+    vi.spyOn(globalThis, 'Blob').mockImplementation(function (parts, opts) {
+      capturedContent = parts[0]
+      return new OrigBlob(parts, opts)
+    })
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:fake')
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+
+    render(<App />)
+    typeInput('b.com, 2, DIRECT\na.com, 1, DIRECT')
+    fireEvent.click(screen.getByRole('button', { name: /Validate/ }))
+    fireEvent.click(screen.getByRole('checkbox', { name: /Sort A.Z/ }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Export JSON' }))
+
+    const records = JSON.parse(capturedContent)
+    expect(records.map(r => r.domain)).toEqual(['a.com', 'b.com'])
+  })
+})
+
 describe('App — batch check', () => {
   it(
     'does not leave "Check all URLs" stuck disabled when Clear results is clicked mid-flight',
@@ -1484,6 +1620,26 @@ describe('App — batch check', () => {
       expect(within(document.querySelector('.batch-row-error')).getByRole('button', { name: 'Copy URL' })).toBeTruthy()
     }
   )
+
+  it('exports batch results as a downloadable CSV', async () => {
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:fake')
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    urlModule.fetchFromUrl.mockResolvedValue('google.com, pub-1, DIRECT')
+
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: /Batch URL check/ }))
+    fireEvent.change(screen.getByLabelText('URLs to check, one per line'), {
+      target: { value: 'a.com' },
+    })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Check all URLs' }))
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Export CSV' }))
+
+    expect(URL.createObjectURL).toHaveBeenCalled()
+  })
 })
 
 describe('App — transient flash messages clear after their own full duration', () => {
@@ -1597,5 +1753,24 @@ describe('App — gutter', () => {
     const inputGutter = container.querySelector('.gutter')
     expect([...inputGutter.children].map(d => d.textContent)).toEqual(['1', '2', '3'])
     expect(inputGutter.children[1].className).not.toBe('gutter-line ')
+  })
+
+  it('highlights the editor while a file is dragged over it, and un-highlights on drag leave', () => {
+    render(<App />)
+    const editor = screen.getByLabelText('app-ads.txt input')
+    expect(editor.className).not.toContain('editor-drag')
+
+    fireEvent.dragOver(editor)
+    expect(editor.className).toContain('editor-drag')
+
+    fireEvent.dragLeave(editor)
+    expect(editor.className).not.toContain('editor-drag')
+  })
+
+  it('validates on Ctrl+Enter from inside the editor, same as clicking Validate', () => {
+    render(<App />)
+    typeInput('bar.com, pub-1, direct')
+    fireEvent.keyDown(screen.getByLabelText('app-ads.txt input'), { key: 'Enter', ctrlKey: true })
+    expect(screen.getByLabelText('Cleaned output').value).toBe('bar.com, pub-1, DIRECT')
   })
 })
