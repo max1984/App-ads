@@ -146,6 +146,20 @@ describe('App', () => {
     expect(screen.getByText('Cleaned output appears here')).toBeTruthy()
   })
 
+  it(
+    'disables Share for an empty input instead of leaving it clickable to copy an empty link — ' +
+      "buildShareUrl's own error === 'empty' branch inside handleShare mirrors this `disabled` " +
+      "prop exactly, which makes that internal branch unreachable through the real UI (same " +
+      'defense-in-depth class as other already-documented unreachable fallbacks in this file)',
+    () => {
+      render(<App />)
+      expect(screen.getByRole('button', { name: 'Share' }).disabled).toBe(true)
+
+      typeInput('a.com, 1, DIRECT')
+      expect(screen.getByRole('button', { name: 'Share' }).disabled).toBe(false)
+    }
+  )
+
   it('shows an inline message instead of alert() when the file is too large to share', async () => {
     const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {})
     render(<App />)
@@ -1051,6 +1065,74 @@ describe('App — version history', () => {
   )
 
   it(
+    'disables "Save current as version" once nothing has changed since the last save, instead ' +
+      "of leaving it clickable to create an identical duplicate — the button's own `disabled` " +
+      "prop mirrors handleSaveVersion's internal early-return guard exactly, which makes that " +
+      'internal guard itself unreachable through the real UI (same defense-in-depth class as ' +
+      'other already-documented unreachable fallbacks in this file), so this is the one that matters',
+    () => {
+      render(<App />)
+      fireEvent.click(screen.getByRole('button', { name: /Version history/ }))
+      typeInput('a.com, 1, DIRECT')
+      const saveBtn = screen.getByRole('button', { name: /Save current as version/ })
+      expect(saveBtn.disabled).toBe(false)
+
+      fireEvent.click(saveBtn)
+      expect(screen.getByText('Version 1')).toBeTruthy()
+      expect(saveBtn.disabled).toBe(true)
+    }
+  )
+
+  it('leaves the version unchanged when the rename prompt is cancelled', () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: /Version history/ }))
+    typeInput('a.com, 1, DIRECT')
+    fireEvent.click(screen.getByRole('button', { name: /Save current as version/ }))
+
+    vi.spyOn(window, 'prompt').mockReturnValue(null)
+    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {})
+    fireEvent.click(screen.getByRole('button', { name: 'Rename "Version 1"' }))
+
+    expect(screen.getByText('Version 1')).toBeTruthy()
+    expect(alertSpy).not.toHaveBeenCalled()
+  })
+
+  it(
+    'regression: a version that gets truncated out of history by an import (MAX_VERSIONS=30, ' +
+      "oldest-first) closes its own open comparison instead of leaving it pointed at a version " +
+      "that no longer exists — unlike Delete, which explicitly clears compareId itself when it " +
+      "removes the compared version by id, nothing in handleImportVersions does, so this relies " +
+      "entirely on the 'keep the open comparison live' effect's own `if (!v) {...}` guard, which " +
+      'had never actually been exercised',
+    async () => {
+      render(<App />)
+      fireEvent.click(screen.getByRole('button', { name: /Version history/ }))
+      typeInput('a.com, 1, DIRECT')
+      fireEvent.click(screen.getByRole('button', { name: /Save current as version/ }))
+      typeInput('a.com, 1, DIRECT\nb.com, 2, DIRECT')
+      fireEvent.click(screen.getByRole('button', { name: 'Compare to current' }))
+      expect(screen.getByText('+1 added')).toBeTruthy()
+
+      // 30 freshly-timestamped, distinct versions push the one just saved
+      // (and currently compared) out of the MAX_VERSIONS=30 window entirely.
+      const flood = Array.from({ length: 30 }, (_, i) => ({
+        id: `flood-${i}`, label: `Flood ${i}`, timestamp: Date.now() + 1000 + i, content: `c${i}.com, 1, DIRECT`, stats: null,
+      }))
+      const jsonInput = document.querySelector('input[type="file"][accept*="json"]')
+      const file = new File([JSON.stringify(flood)], 'flood.json', { type: 'application/json' })
+      fireEvent.change(jsonInput, { target: { files: [file] } })
+      await waitFor(() => expect(screen.queryByText('Version 1')).toBeFalsy())
+
+      // The compared row itself is gone from the list either way (it no
+      // longer exists in `versions`) — the actual regression this guards is
+      // versionDiff staying set to its last (now stale) value and the diff
+      // panel below the list rendering on regardless, not tied to any
+      // specific row's own presence.
+      expect(document.querySelector('.version-diff')).toBeFalsy()
+    }
+  )
+
+  it(
     'alerts when renaming a version fails to persist, instead of pretending it stuck',
     () => {
       // Same "success state shown without checking the operation's result"
@@ -1642,6 +1724,28 @@ describe('App — batch check', () => {
       expect(within(batchResultsEl).getByText('network error')).toBeTruthy()
       expect(document.querySelector('.batch-row-error')).toBeTruthy()
       expect(within(document.querySelector('.batch-row-error')).getByRole('button', { name: 'Copy URL' })).toBeTruthy()
+    }
+  )
+
+  it(
+    'renders a warning row (not an error or ok row) for a URL whose content only has warnings ' +
+      '— every other batch test exercises either the error branch or the implicit ok branch, never ' +
+      "the row's hasWarnings-but-not-hasErrors state in between",
+    async () => {
+      urlModule.fetchFromUrl.mockResolvedValue('a.com, 1, DIRECT, , extra')
+
+      render(<App />)
+      fireEvent.click(screen.getByRole('button', { name: /Batch URL check/ }))
+      fireEvent.change(screen.getByLabelText('URLs to check, one per line'), {
+        target: { value: 'warn.com' },
+      })
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Check all URLs' }))
+      })
+
+      expect(document.querySelector('.batch-row-warning')).toBeTruthy()
+      expect(document.querySelector('.batch-row-error')).toBeFalsy()
+      expect(document.querySelector('.batch-stat-warning')).toBeTruthy()
     }
   )
 
