@@ -356,6 +356,24 @@ describe('App — accessibility', () => {
   })
 
   it(
+    "pressing a non-activating key (e.g. Tab) on the issue-top div itself must NOT toggle it — " +
+      'the only existing keyboard test used Enter, so the `e.key !== \'Enter\' && e.key !== \' \'` ' +
+      'early-return guard had never actually been taken',
+    () => {
+      render(<App />)
+      typeInput('OWNERDOMAIN=a.com\nfoo.com, 1')
+      fireEvent.click(screen.getByRole('button', { name: /Validate/ }))
+      const jumpLink = screen.getByTitle('Jump to this line in the editor')
+      const issueTop = jumpLink.closest('[role="button"]')
+      expect(issueTop.getAttribute('aria-expanded')).toBe('true')
+
+      fireEvent.keyDown(issueTop, { key: 'Tab' })
+
+      expect(issueTop.getAttribute('aria-expanded')).toBe('true')
+    }
+  )
+
+  it(
     'regression: pressing Enter/Space while focus is on the nested "jump to line" button must ' +
       "NOT also toggle the parent card — keydown bubbles from that real <button> up to the " +
       "outer role=button's onKeyDown, which used to fire unconditionally and both wrongly " +
@@ -1230,6 +1248,25 @@ describe('App — version history', () => {
   )
 
   it(
+    'renders "(none)" for a cert-changed row\'s side that has NO cert ID — every existing ' +
+      'cert-changed test so far compared two non-empty cert IDs, so the `before.certId || ' +
+      "'(none)'`/`after.certId || '(none)'` fallback was never actually rendered",
+    () => {
+      render(<App />)
+      fireEvent.click(screen.getByRole('button', { name: /Version history/ }))
+      typeInput('a.com, 1, DIRECT, f08c47fec0942fa0')
+      fireEvent.click(screen.getByRole('button', { name: /Save current as version/ }))
+      expect(screen.getByText('Version 1')).toBeTruthy()
+
+      typeInput('a.com, 1, DIRECT')
+      fireEvent.click(screen.getByRole('button', { name: 'Compare to current' }))
+
+      expect(screen.getByText('1 cert changed')).toBeTruthy()
+      expect(screen.getByText(/f08c47fec0942fa0 → \(none\)/)).toBeTruthy()
+    }
+  )
+
+  it(
     'shows a saved version\'s own error/warning counts in its row, not just the live output panel — ' +
       'every other version-history test so far saved error-free input, so version-stats\' ' +
       '`{s.errors > 0 && ...}`/`{s.warnings > 0 && ...}` branches were never actually rendered',
@@ -1746,6 +1783,27 @@ describe('App — batch check', () => {
       expect(document.querySelector('.batch-row-warning')).toBeTruthy()
       expect(document.querySelector('.batch-row-error')).toBeFalsy()
       expect(document.querySelector('.batch-stat-warning')).toBeTruthy()
+    }
+  )
+
+  it(
+    'shows a "dupes" count in a batch row when its fetched content has a duplicate record — no ' +
+      "existing batch test's content ever had a duplicate, so stats.duplicatesRemoved > 0's span " +
+      'was never actually rendered',
+    async () => {
+      urlModule.fetchFromUrl.mockResolvedValue('a.com, 1, DIRECT\na.com, 1, DIRECT')
+
+      render(<App />)
+      fireEvent.click(screen.getByRole('button', { name: /Batch URL check/ }))
+      fireEvent.change(screen.getByLabelText('URLs to check, one per line'), {
+        target: { value: 'dupes.com' },
+      })
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Check all URLs' }))
+      })
+
+      const batchResultsEl = document.querySelector('.batch-results')
+      expect(within(batchResultsEl).getByText(/1 dupes/)).toBeTruthy()
     }
   )
 
