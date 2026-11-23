@@ -23,8 +23,14 @@ describe('normalizeAdsTxtUrl', () => {
     }
   )
 
-  it('returns empty string for empty input', () => {
+  it('returns the raw string unchanged if it is not a parseable URL even with a scheme', () => {
+    expect(normalizeAdsTxtUrl('http://')).toBe('http://')
+  })
+
+  it('returns empty string for empty or missing input', () => {
     expect(normalizeAdsTxtUrl('   ')).toBe('')
+    expect(normalizeAdsTxtUrl(undefined)).toBe('')
+    expect(normalizeAdsTxtUrl(null)).toBe('')
   })
 
   it(
@@ -117,5 +123,12 @@ describe('fetchFromUrl', () => {
     const f = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'))
     await expect(fetchFromUrl('https://x.com/app-ads.txt', f)).rejects.toThrow('network error or blocked by CORS')
     expect(f).toHaveBeenCalledTimes(4) // direct + all three proxies
+  })
+
+  it('reports a timeout distinctly when the direct fetch and every proxy all time out', async () => {
+    const timeoutErr = Object.assign(new Error('The operation was aborted'), { name: 'TimeoutError' })
+    const f = vi.fn().mockRejectedValue(timeoutErr)
+    await expect(fetchFromUrl('https://x.com/app-ads.txt', f)).rejects.toThrow('request timed out')
+    expect(f).toHaveBeenCalledTimes(4)
   })
 })

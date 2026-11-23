@@ -33,6 +33,18 @@ describe('mergeImportedVersions', () => {
     expect(versions).toEqual([{ id: 'b', label: 'V b', timestamp: 2, content: 'a.com, 1, DIRECT', stats: null }])
   })
 
+  it('keeps a well-formed stats object but drops one with a missing/non-finite field', () => {
+    const { versions } = mergeImportedVersions(
+      [],
+      [
+        v('a', 1, { stats: { keptRecords: 3, errors: 1, warnings: 0 } }),
+        v('b', 2, { stats: { keptRecords: 3, errors: 'oops', warnings: 0 } }),
+      ]
+    )
+    expect(versions.find(x => x.id === 'a').stats).toEqual({ keptRecords: 3, errors: 1, warnings: 0 })
+    expect(versions.find(x => x.id === 'b').stats).toBeNull()
+  })
+
   it(
     'reports a valid, non-duplicate entry sliced off by the max-history cap as ' +
       'droppedForSpace, not silently uncounted by both added and skipped',
@@ -55,6 +67,11 @@ describe('version storage', () => {
   it('drops corrupted entries on load', () => {
     const s = memoryStorage({ [VERSIONS_KEY]: JSON.stringify([v('a', 1), { id: 5 }]) })
     expect(loadVersions(s).map(x => x.id)).toEqual(['a'])
+  })
+
+  it('treats valid JSON that is not an array (e.g. a hand-edited object) as empty, not a crash', () => {
+    const s = memoryStorage({ [VERSIONS_KEY]: JSON.stringify({ versions: [] }) })
+    expect(loadVersions(s)).toEqual([])
   })
 
   it('reports failure when storage throws (quota exceeded)', () => {

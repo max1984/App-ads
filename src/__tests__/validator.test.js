@@ -433,6 +433,11 @@ describe('computeHealthScore', () => {
     expect(computeHealthScore({ totalRecords: 5, errors: 1, warnings: 1, duplicatesRemoved: 1 })).toEqual({ score: 85, grade: 'B' })
     expect(computeHealthScore({ totalRecords: 50, errors: 20, warnings: 20, duplicatesRemoved: 20 })).toEqual({ score: 0, grade: 'F' })
   })
+
+  it('assigns the C and D grades at their score thresholds', () => {
+    expect(computeHealthScore({ totalRecords: 10, errors: 3, warnings: 0, duplicatesRemoved: 0 })).toEqual({ score: 70, grade: 'C' })
+    expect(computeHealthScore({ totalRecords: 10, errors: 5, warnings: 0, duplicatesRemoved: 0 })).toEqual({ score: 50, grade: 'D' })
+  })
 })
 
 describe('validateAdsTxt — cert ID mismatch', () => {

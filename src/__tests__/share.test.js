@@ -12,6 +12,12 @@ describe('share encoding', () => {
     expect(decodeShare('%%%')).toBeNull()
     expect(decodeShare(btoa('\xff\xfe'))).toBeNull()
   })
+
+  it('returns null if encoding itself throws (e.g. an engine without a working btoa)', () => {
+    vi.stubGlobal('btoa', () => { throw new Error('btoa unavailable') })
+    expect(encodeShare('a.com, 1, DIRECT')).toBeNull()
+    vi.unstubAllGlobals()
+  })
 })
 
 describe('buildShareUrl', () => {
@@ -25,6 +31,12 @@ describe('buildShareUrl', () => {
     expect(buildShareUrl('   ', 'b').error).toBe('empty')
     expect(buildShareUrl('x'.repeat(MAX_SHARE_LENGTH), 'b').error).toBe('too-large')
   })
+
+  it('reports an "encode" error (not a thrown exception) when encodeShare fails', () => {
+    vi.stubGlobal('btoa', () => { throw new Error('btoa unavailable') })
+    expect(buildShareUrl('a.com, 1, DIRECT', 'b').error).toBe('encode')
+    vi.unstubAllGlobals()
+  })
 })
 
 describe('copyText', () => {
@@ -32,6 +44,20 @@ describe('copyText', () => {
     document.querySelectorAll('textarea').forEach(ta => ta.remove())
     delete document.execCommand
     vi.restoreAllMocks()
+  })
+
+  it('returns true via the clipboard API directly, with no fallback textarea', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      configurable: true,
+    })
+
+    const ok = await copyText('hello')
+
+    expect(ok).toBe(true)
+    expect(writeText).toHaveBeenCalledWith('hello')
+    expect(document.querySelectorAll('textarea').length).toBe(0)
   })
 
   it('removes the fallback textarea even when execCommand throws', async () => {
