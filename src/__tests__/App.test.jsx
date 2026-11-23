@@ -1148,6 +1148,30 @@ describe('App — version history', () => {
   )
 
   it(
+    'shows a saved version\'s own error/warning counts in its row, not just the live output panel — ' +
+      'every other version-history test so far saved error-free input, so version-stats\' ' +
+      '`{s.errors > 0 && ...}`/`{s.warnings > 0 && ...}` branches were never actually rendered',
+    () => {
+      const { container } = render(<App />)
+      fireEvent.click(screen.getByRole('button', { name: /Version history/ }))
+      typeInput(
+        'a.com, 1, DIRECT, nothex-not-16chars\nb.com, 2, DIRECT, 1234567890123456'
+      )
+      fireEvent.click(screen.getByRole('button', { name: /Validate/ }))
+      fireEvent.click(screen.getByRole('button', { name: /Save current as version/ }))
+
+      expect(screen.getByText('Version 1')).toBeTruthy()
+      // The "N errors"/"N warnings" text is split across its own sibling text
+      // nodes ({s.errors} and the literal " errors"), which getByText's
+      // default text-node matching can't see as one string — assert on the
+      // element's full textContent instead.
+      const stats = container.querySelector('.version-stats')
+      expect(stats.textContent).toMatch(/1 errors/)
+      expect(stats.textContent).toMatch(/2 warnings/)
+    }
+  )
+
+  it(
     'marks the Compare button as pressed for assistive tech while a comparison is open, not just via its changed label',
     () => {
       render(<App />)
