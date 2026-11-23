@@ -15,6 +15,25 @@ describe('cors-proxy worker', () => {
     expect(res.status).toBe(400)
   })
 
+  it('rejects a target with a disallowed protocol even when the path looks right', async () => {
+    // Regression: isAllowedAppAdsUrl checks protocol AND path — a target whose path alone
+    // matches /app-ads.txt$ must still be rejected if its scheme isn't http/https, or this
+    // check would be purely cosmetic for e.g. ftp:// or javascript:// targets.
+    const res = await worker.fetch(req('https://proxy.example/?url=ftp://good.com/app-ads.txt'))
+    expect(res.status).toBe(400)
+    expect(await res.text()).toBe('Only http/https app-ads.txt paths allowed')
+  })
+
+  it('proxies a plain (non-https) http:// target', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(new Response('example.com, 123, DIRECT', { status: 200 }))
+    )
+    const res = await worker.fetch(req('https://proxy.example/?url=http://good.com/app-ads.txt'))
+    expect(res.status).toBe(200)
+    expect(await res.text()).toBe('example.com, 123, DIRECT')
+  })
+
   it('proxies a plain app-ads.txt response', async () => {
     vi.stubGlobal(
       'fetch',
@@ -137,5 +156,16 @@ describe('cors-proxy worker', () => {
     const res = await worker.fetch(req('https://proxy.example/?url=https://good.com/app-ads.txt'))
     expect(res.status).toBe(502)
     expect(await res.text()).toBe('Upstream response too large')
+  })
+
+  it('falls back to text/plain when the upstream response has no Content-Type', async () => {
+    // A plain string body makes Response auto-set its own content-type, masking the
+    // fallback this test targets — a binary body leaves Content-Type genuinely absent.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(new Response(new Uint8Array([1, 2, 3]), { status: 200 }))
+    )
+    const res = await worker.fetch(req('https://proxy.example/?url=https://good.com/app-ads.txt'))
+    expect(res.headers.get('Content-Type')).toBe('text/plain')
   })
 })
