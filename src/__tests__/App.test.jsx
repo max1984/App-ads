@@ -1006,6 +1006,30 @@ describe('App — version history', () => {
   )
 
   it(
+    'renders added/removed/cert-changed RECORD lines in the diff, not just variable changes — ' +
+      'every other VersionDiffView test so far only exercised the variable-diff (added/changed) path, ' +
+      'never a removed variable either',
+    () => {
+      render(<App />)
+      fireEvent.click(screen.getByRole('button', { name: /Version history/ }))
+      typeInput('CONTACT=old@example.com\na.com, 1, DIRECT, f08c47fec0942fa0\nb.com, 2, DIRECT')
+      fireEvent.click(screen.getByRole('button', { name: /Save current as version/ }))
+      expect(screen.getByText('Version 1')).toBeTruthy()
+
+      typeInput('a.com, 1, DIRECT, 44444444444444444\nc.com, 3, DIRECT')
+      fireEvent.click(screen.getByRole('button', { name: 'Compare to current' }))
+
+      expect(screen.getByText('+1 added')).toBeTruthy()
+      expect(screen.getByText('−1 removed')).toBeTruthy()
+      expect(screen.getByText('1 cert changed')).toBeTruthy()
+      expect(screen.getByText('+ c.com, 3, DIRECT')).toBeTruthy()
+      expect(screen.getByText('− b.com, 2, DIRECT')).toBeTruthy()
+      expect(screen.getByText(/f08c47fec0942fa0 → 44444444444444444/)).toBeTruthy()
+      expect(screen.getByText('− CONTACT=old@example.com')).toBeTruthy()
+    }
+  )
+
+  it(
     'marks the Compare button as pressed for assistive tech while a comparison is open, not just via its changed label',
     () => {
       render(<App />)
