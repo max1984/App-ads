@@ -1984,10 +1984,22 @@ describe('App — every button has an accessible name', () => {
     expectAllButtonsToHaveAccessibleNames()
   })
 
-  it('after validating a file (result, diff and coverage sections rendered)', () => {
+  it('after validating a file, with the diff and coverage panels open', () => {
     render(<App />)
-    typeInput('OWNERDOMAIN=example.com\nfoo.com, 1\nbar.com, pub-1, direct')
+    // Same input as the "Changes panel" tests above — it normalizes a
+    // domain and a DIRECT/direct case, and adds a cert, so it's known to
+    // populate result.changes (opens the diff panel) as well as
+    // result.stats.totalRecords (renders the coverage panel). An input
+    // that doesn't produce any changes would silently skip the diff
+    // panel's button entirely — asserting both panels are actually open
+    // (not just clicking blindly) is what catches that.
+    typeInput('OWNERDOMAIN=example.com\nGoogle.com, pub-1, direct')
     fireEvent.click(screen.getByRole('button', { name: /Validate/ }))
+    const diffToggle = screen.getByRole('button', { name: /Changes/ })
+    const coverageToggle = screen.getByRole('button', { name: /Network Coverage/ })
+    expect(diffToggle.getAttribute('aria-expanded')).toBe('true')
+    fireEvent.click(coverageToggle)
+    expect(coverageToggle.getAttribute('aria-expanded')).toBe('true')
     expectAllButtonsToHaveAccessibleNames()
   })
 
