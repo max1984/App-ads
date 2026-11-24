@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { render, screen, fireEvent, cleanup, act, waitFor, within } from '@testing-library/react'
+import { computeAccessibleName } from 'dom-accessibility-api'
 import App from '../App.jsx'
 import * as urlModule from '../url.js'
 
@@ -1958,5 +1959,47 @@ describe('App — gutter', () => {
     typeInput('bar.com, pub-1, direct')
     fireEvent.keyDown(screen.getByLabelText('app-ads.txt input'), { key: 'Enter', ctrlKey: true })
     expect(screen.getByLabelText('Cleaned output').value).toBe('bar.com, pub-1, DIRECT')
+  })
+})
+
+// Stands in for eslint-plugin-jsx-a11y's "every button needs an accessible
+// name" check — that plugin's latest release (6.10.2) only supports
+// eslint up to v9, and this repo is on eslint 10, so installing it fails
+// with an unresolvable peer-dependency conflict. jest-dom (which has a
+// toHaveAccessibleName matcher) isn't set up in this project either, so
+// this computes the name the same way Testing Library's own getByRole
+// does under the hood, via the dom-accessibility-api package it already
+// depends on transitively.
+describe('App — every button has an accessible name', () => {
+  const expectAllButtonsToHaveAccessibleNames = () => {
+    const buttons = screen.getAllByRole('button')
+    expect(buttons.length).toBeGreaterThan(0)
+    for (const button of buttons) {
+      expect(computeAccessibleName(button)).not.toBe('')
+    }
+  }
+
+  it('in the empty initial state', () => {
+    render(<App />)
+    expectAllButtonsToHaveAccessibleNames()
+  })
+
+  it('after validating a file (result, diff and coverage sections rendered)', () => {
+    render(<App />)
+    typeInput('OWNERDOMAIN=example.com\nfoo.com, 1\nbar.com, pub-1, direct')
+    fireEvent.click(screen.getByRole('button', { name: /Validate/ }))
+    expectAllButtonsToHaveAccessibleNames()
+  })
+
+  it('with the batch URL check panel open', () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: /Batch URL check/ }))
+    expectAllButtonsToHaveAccessibleNames()
+  })
+
+  it('with the version history panel open', () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: /Version history/ }))
+    expectAllButtonsToHaveAccessibleNames()
   })
 })
